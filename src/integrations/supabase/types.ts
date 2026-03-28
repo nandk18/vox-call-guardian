@@ -14,7 +14,160 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      agents: {
+        Row: {
+          bolna_agent_id: string | null
+          business_name: string | null
+          created_at: string | null
+          greeting: string | null
+          id: string
+          industry: string | null
+          language_auto_detect: boolean | null
+          language_primary: string | null
+          onboarding_complete: boolean | null
+          owner_mobile: string | null
+          owner_whatsapp: string | null
+          phone_number: string | null
+          status: string | null
+          talk_speed: string | null
+          trial_ends_at: string | null
+          user_id: string
+          voice: string | null
+        }
+        Insert: {
+          bolna_agent_id?: string | null
+          business_name?: string | null
+          created_at?: string | null
+          greeting?: string | null
+          id?: string
+          industry?: string | null
+          language_auto_detect?: boolean | null
+          language_primary?: string | null
+          onboarding_complete?: boolean | null
+          owner_mobile?: string | null
+          owner_whatsapp?: string | null
+          phone_number?: string | null
+          status?: string | null
+          talk_speed?: string | null
+          trial_ends_at?: string | null
+          user_id: string
+          voice?: string | null
+        }
+        Update: {
+          bolna_agent_id?: string | null
+          business_name?: string | null
+          created_at?: string | null
+          greeting?: string | null
+          id?: string
+          industry?: string | null
+          language_auto_detect?: boolean | null
+          language_primary?: string | null
+          onboarding_complete?: boolean | null
+          owner_mobile?: string | null
+          owner_whatsapp?: string | null
+          phone_number?: string | null
+          status?: string | null
+          talk_speed?: string | null
+          trial_ends_at?: string | null
+          user_id?: string
+          voice?: string | null
+        }
+        Relationships: []
+      }
+      calls: {
+        Row: {
+          agent_id: string
+          caller_name: string | null
+          caller_need: string | null
+          caller_number: string | null
+          created_at: string | null
+          duration_secs: number | null
+          id: string
+          is_read: boolean | null
+          outcome: string | null
+          recording_url: string | null
+          summary: string | null
+          transcript: Json | null
+        }
+        Insert: {
+          agent_id: string
+          caller_name?: string | null
+          caller_need?: string | null
+          caller_number?: string | null
+          created_at?: string | null
+          duration_secs?: number | null
+          id?: string
+          is_read?: boolean | null
+          outcome?: string | null
+          recording_url?: string | null
+          summary?: string | null
+          transcript?: Json | null
+        }
+        Update: {
+          agent_id?: string
+          caller_name?: string | null
+          caller_need?: string | null
+          caller_number?: string | null
+          created_at?: string | null
+          duration_secs?: number | null
+          id?: string
+          is_read?: boolean | null
+          outcome?: string | null
+          recording_url?: string | null
+          summary?: string | null
+          transcript?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calls_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge: {
+        Row: {
+          address: string | null
+          agent_id: string
+          extra_notes: string | null
+          faq: string | null
+          hours: string | null
+          id: string
+          services: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          address?: string | null
+          agent_id: string
+          extra_notes?: string | null
+          faq?: string | null
+          hours?: string | null
+          id?: string
+          services?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          address?: string | null
+          agent_id?: string
+          extra_notes?: string | null
+          faq?: string | null
+          hours?: string | null
+          id?: string
+          services?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
