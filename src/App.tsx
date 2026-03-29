@@ -29,6 +29,14 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route
+              path="/app/onboarding"
+              element={
+                <ProtectedRoute>
+                  <OnboardingPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/app"
               element={
                 <ProtectedRoute>
@@ -39,7 +47,6 @@ const App = () => (
               <Route path="inbox" element={<InboxPage />} />
               <Route path="agent" element={<AgentPage />} />
               <Route path="settings" element={<SettingsPage />} />
-              <Route path="onboarding" element={<OnboardingPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
