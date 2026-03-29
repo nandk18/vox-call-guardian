@@ -530,11 +530,11 @@ const OnboardingPage = () => {
                   </>
                 )}
 
-                {/* Always show these fields regardless of search mode */}
-                {(selectedPlace || manualEntry || !placesAvailable) && (
+                {/* Show business name field when place is selected (editable) */}
+                {selectedPlace && (
                   <div className="space-y-2">
-                    <Label htmlFor="biz-name-manual">Business Name</Label>
-                    <Input id="biz-name-manual" placeholder="e.g. Sharma Dental Clinic" value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
+                    <Label>Business Name</Label>
+                    <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
                   </div>
                 )}
 
