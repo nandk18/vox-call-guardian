@@ -111,11 +111,12 @@ const OnboardingPage = () => {
   // Check Google Places API availability
   useEffect(() => {
     const checkPlaces = () => {
-      if (window.google?.maps?.places) {
+      const w = window as any;
+      if (w.google?.maps?.places) {
         setPlacesAvailable(true);
-        autocompleteService.current = new window.google.maps.places.AutocompleteService();
+        autocompleteService.current = new w.google.maps.places.AutocompleteService();
         if (placesDiv.current) {
-          placesService.current = new window.google.maps.places.PlacesService(placesDiv.current);
+          placesService.current = new w.google.maps.places.PlacesService(placesDiv.current);
         }
       } else {
         const apiKey = import.meta.env.VITE_GOOGLE_PLACES_API_KEY;
