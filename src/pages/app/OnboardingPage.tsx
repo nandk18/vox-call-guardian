@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Phone, ChevronRight, Pencil, Check } from "lucide-react";
+import { Loader2, Phone, ChevronRight, ChevronLeft, Check, Search, X, Plus, MapPin, Building } from "lucide-react";
 import { toast } from "sonner";
 
 const industries = [
@@ -45,18 +45,31 @@ const languages = [
   { value: "malayalam", label: "മലയാളം — Malayalam" },
   { value: "marathi", label: "मराठी — Marathi" },
   { value: "bengali", label: "বাংলা — Bengali" },
-  { value: "gujarati", label: "ગુજરાતી — Gujarati" },
+  { value: "gujarati", label: "ગુજરাতી — Gujarati" },
   { value: "punjabi", label: "ਪੰਜਾਬੀ — Punjabi" },
   { value: "odia", label: "ଓଡ଼ିଆ — Odia" },
 ];
 
-const MOCK_BUSINESS = {
-  address: "42 MG Road, Indiranagar, Bangalore 560038",
-  phone: "+91 80 2345 6789",
-  hours: "Mon–Sat: 9:00 AM – 8:00 PM\nSun: 10:00 AM – 2:00 PM",
-};
-
 const VOX_NUMBER = "+91 98765 43210";
+
+// Google Places types
+interface PlacePrediction {
+  place_id: string;
+  description: string;
+  structured_formatting: {
+    main_text: string;
+    secondary_text: string;
+  };
+}
+
+interface PlaceDetails {
+  name: string;
+  formatted_address: string;
+  formatted_phone_number?: string;
+  opening_hours?: {
+    weekday_text?: string[];
+  };
+}
 
 const OnboardingPage = () => {
   const { user } = useAuth();
@@ -72,17 +85,50 @@ const OnboardingPage = () => {
   const [language, setLanguage] = useState("hindi");
   const [hinglish, setHinglish] = useState(true);
 
+  // Google Places
+  const [searchQuery, setSearchQuery] = useState("");
+  const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState<PlaceDetails | null>(null);
+  const [manualEntry, setManualEntry] = useState(false);
+  const [placesAvailable, setPlacesAvailable] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const autocompleteService = useRef<any>(null);
+  const placesService = useRef<any>(null);
+  const placesDiv = useRef<HTMLDivElement>(null);
+
   // Step 2
-  const [loading2, setLoading2] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [address, setAddress] = useState(MOCK_BUSINESS.address);
-  const [hours, setHours] = useState(MOCK_BUSINESS.hours);
+  const [address, setAddress] = useState("");
+  const [hours, setHours] = useState("");
   const [faq, setFaq] = useState("");
   const [services, setServices] = useState("");
   const [extraNotes, setExtraNotes] = useState("");
 
   // Step 3
   const [whatsapp, setWhatsapp] = useState("");
+
+  // Check Google Places API availability
+  useEffect(() => {
+    const checkPlaces = () => {
+      if (window.google?.maps?.places) {
+        setPlacesAvailable(true);
+        autocompleteService.current = new window.google.maps.places.AutocompleteService();
+        if (placesDiv.current) {
+          placesService.current = new window.google.maps.places.PlacesService(placesDiv.current);
+        }
+      } else {
+        const apiKey = import.meta.env.VITE_GOOGLE_PLACES_API_KEY;
+        if (!apiKey) {
+          console.warn("VITE_GOOGLE_PLACES_API_KEY not set. Falling back to manual entry.");
+          setManualEntry(true);
+        }
+      }
+    };
+    // Check after a small delay for script loading
+    const t = setTimeout(checkPlaces, 500);
+    return () => clearTimeout(t);
+  }, []);
 
   // Pre-fill business name from user metadata
   useEffect(() => {
@@ -91,14 +137,112 @@ const OnboardingPage = () => {
     }
   }, [user]);
 
-  // Simulate Google Maps lookup on step 2
+  // Load existing agent data
   useEffect(() => {
-    if (step === 2) {
-      setLoading2(true);
-      const t = setTimeout(() => setLoading2(false), 2000);
-      return () => clearTimeout(t);
+    if (!user) return;
+    const load = async () => {
+      const { data: agent } = await supabase
+        .from("agents")
+        .select("id, business_name, industry, language_primary, language_auto_detect, phone_number, owner_whatsapp")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (agent) {
+        setAgentId(agent.id);
+        if (agent.business_name) setBusinessName(agent.business_name);
+        if (agent.industry) setIndustry(agent.industry);
+        if (agent.language_primary) setLanguage(agent.language_primary);
+        if (agent.language_auto_detect !== null) setHinglish(agent.language_auto_detect);
+        if (agent.phone_number) setPhoneNumber(agent.phone_number.replace("+91", ""));
+        if (agent.owner_whatsapp) setWhatsapp(agent.owner_whatsapp.replace("+91", ""));
+      }
+    };
+    load();
+  }, [user]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Google Places autocomplete search
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    if (query.length < 3 || !autocompleteService.current) {
+      setPredictions([]);
+      setShowDropdown(false);
+      return;
     }
-  }, [step]);
+    autocompleteService.current.getPlacePredictions(
+      {
+        input: query,
+        componentRestrictions: { country: "in" },
+        types: ["establishment"],
+      },
+      (results: PlacePrediction[] | null) => {
+        setPredictions(results?.slice(0, 5) || []);
+        setShowDropdown(true);
+        setHighlightedIndex(-1);
+      }
+    );
+  }, []);
+
+  const selectPlace = (placeId: string) => {
+    if (!placesService.current) return;
+    placesService.current.getDetails(
+      {
+        placeId,
+        fields: ["name", "formatted_address", "formatted_phone_number", "opening_hours"],
+      },
+      (place: PlaceDetails | null) => {
+        if (place) {
+          setSelectedPlace(place);
+          setBusinessName(place.name || "");
+          setAddress(place.formatted_address || "");
+          setPhoneNumber(place.formatted_phone_number?.replace("+91 ", "").replace("+91", "") || "");
+          setHours(place.opening_hours?.weekday_text?.join("\n") || "");
+          setShowDropdown(false);
+          setSearchQuery("");
+        }
+      }
+    );
+  };
+
+  const clearSelection = () => {
+    setSelectedPlace(null);
+    setBusinessName("");
+    setAddress("");
+    setPhoneNumber("");
+    setHours("");
+    setSearchQuery("");
+    setManualEntry(false);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    const totalItems = predictions.length + 1; // +1 for "not listed" option
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex(prev => Math.min(prev + 1, totalItems - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === "Enter" && highlightedIndex >= 0) {
+      e.preventDefault();
+      if (highlightedIndex < predictions.length) {
+        selectPlace(predictions[highlightedIndex].place_id);
+      } else {
+        setManualEntry(true);
+        setShowDropdown(false);
+      }
+    } else if (e.key === "Escape") {
+      setShowDropdown(false);
+    }
+  };
 
   const handleStep1Next = async () => {
     if (!businessName.trim()) {
@@ -107,36 +251,27 @@ const OnboardingPage = () => {
     }
     setSaving(true);
     try {
-      // Upsert agent row
       const { data: existing } = await supabase
         .from("agents")
         .select("id")
         .eq("user_id", user!.id)
         .maybeSingle();
 
+      const agentData = {
+        business_name: businessName.trim(),
+        phone_number: phoneNumber.trim() ? `+91${phoneNumber.replace(/\D/g, "")}` : null,
+        industry,
+        language_primary: language,
+        language_auto_detect: hinglish,
+      };
+
       if (existing) {
-        await supabase
-          .from("agents")
-          .update({
-            business_name: businessName.trim(),
-            phone_number: phoneNumber.trim() ? `+91${phoneNumber.replace(/\D/g, "")}` : null,
-            industry,
-            language_primary: language,
-            language_auto_detect: hinglish,
-          })
-          .eq("id", existing.id);
+        await supabase.from("agents").update(agentData).eq("id", existing.id);
         setAgentId(existing.id);
       } else {
         const { data: newAgent } = await supabase
           .from("agents")
-          .insert({
-            user_id: user!.id,
-            business_name: businessName.trim(),
-            phone_number: phoneNumber.trim() ? `+91${phoneNumber.replace(/\D/g, "")}` : null,
-            industry,
-            language_primary: language,
-            language_auto_detect: hinglish,
-          })
+          .insert({ user_id: user!.id, ...agentData })
           .select("id")
           .single();
         if (newAgent) setAgentId(newAgent.id);
@@ -153,6 +288,14 @@ const OnboardingPage = () => {
     if (!agentId) return;
     setSaving(true);
     try {
+      // Update agent fields too
+      await supabase.from("agents").update({
+        business_name: businessName.trim(),
+        phone_number: phoneNumber.trim() ? `+91${phoneNumber.replace(/\D/g, "")}` : null,
+        industry,
+        language_primary: language,
+      }).eq("id", agentId);
+
       // Upsert knowledge
       const { data: existing } = await supabase
         .from("knowledge")
@@ -203,7 +346,6 @@ const OnboardingPage = () => {
   };
 
   const handleSkip = async () => {
-    // Create agent if not exists, mark onboarding complete
     if (!agentId && user) {
       const { data: existing } = await supabase
         .from("agents")
@@ -225,13 +367,32 @@ const OnboardingPage = () => {
     navigate("/app/inbox");
   };
 
+  const goToStep = (targetStep: number) => {
+    if (targetStep < step) setStep(targetStep);
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
+      {/* Hidden div for PlacesService */}
+      <div ref={placesDiv} className="hidden" />
+
       {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-4">
-        <span className="text-sm text-muted-foreground font-medium">
-          Step {step} of 3
-        </span>
+        <div className="flex items-center gap-4">
+          {step === 1 && (
+            <button onClick={() => navigate("/")} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              ← Back to home
+            </button>
+          )}
+          {step > 1 && (
+            <button onClick={() => setStep(step - 1)} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              ← Back
+            </button>
+          )}
+          <span className="text-sm text-muted-foreground font-medium">
+            Step {step} of 3
+          </span>
+        </div>
         <button
           onClick={handleSkip}
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -240,9 +401,27 @@ const OnboardingPage = () => {
         </button>
       </div>
 
-      {/* Progress */}
-      <div className="px-6">
-        <Progress value={(step / 3) * 100} className="h-1.5" />
+      {/* Progress with dots */}
+      <div className="px-6 flex items-center gap-3">
+        <Progress value={(step / 3) * 100} className="h-1.5 flex-1" />
+        <div className="flex items-center gap-2">
+          {[1, 2, 3].map(s => (
+            <button
+              key={s}
+              onClick={() => goToStep(s)}
+              disabled={s > step}
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                s < step
+                  ? "bg-primary text-primary-foreground cursor-pointer"
+                  : s === step
+                  ? "bg-primary text-primary-foreground ring-2 ring-primary/30"
+                  : "bg-secondary text-muted-foreground cursor-not-allowed"
+              }`}
+            >
+              {s < step ? <Check className="w-3 h-3" /> : s}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Content */}
@@ -256,43 +435,115 @@ const OnboardingPage = () => {
               </div>
 
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="biz-name">Business Name</Label>
-                  <Input
-                    id="biz-name"
-                    placeholder="e.g. Sharma Dental Clinic"
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="biz-phone">Business Phone Number</Label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground bg-secondary px-3 py-2 rounded-md border border-input">
-                      +91
-                    </span>
-                    <Input
-                      id="biz-phone"
-                      placeholder="98765 43210"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      className="flex-1"
-                    />
+                {/* Google Places Search or Manual */}
+                {!selectedPlace && !manualEntry && placesAvailable ? (
+                  <div className="space-y-2 relative" ref={searchRef}>
+                    <Label>Search your business</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Type your business name or address..."
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        onKeyDown={handleSearchKeyDown}
+                        onFocus={() => predictions.length > 0 && setShowDropdown(true)}
+                        className="pl-10"
+                      />
+                    </div>
+                    {showDropdown && (
+                      <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-xl shadow-xl overflow-hidden animate-in fade-in-0 slide-in-from-top-1 duration-200">
+                        {predictions.map((p, i) => (
+                          <button
+                            key={p.place_id}
+                            onClick={() => selectPlace(p.place_id)}
+                            className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-secondary transition-colors border-b border-border last:border-0 ${
+                              highlightedIndex === i ? "bg-secondary" : ""
+                            }`}
+                          >
+                            <Building className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-foreground truncate">{p.structured_formatting.main_text}</p>
+                              <p className="text-xs text-muted-foreground truncate">{p.structured_formatting.secondary_text}</p>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => { setManualEntry(true); setShowDropdown(false); }}
+                          className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-secondary transition-colors ${
+                            highlightedIndex === predictions.length ? "bg-secondary" : ""
+                          }`}
+                        >
+                          <Plus className="w-4 h-4 text-primary shrink-0" />
+                          <span className="text-sm text-primary font-medium">My business isn't listed — enter manually</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </div>
+                ) : selectedPlace ? (
+                  <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center">
+                      <Check className="w-4 h-4 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{selectedPlace.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{selectedPlace.formatted_address}</p>
+                    </div>
+                    <button onClick={clearSelection} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                      <X className="w-3 h-3" /> Change
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Manual entry or Places not available */}
+                    {!placesAvailable && !manualEntry && (
+                      <div className="rounded-lg bg-secondary/50 p-3 text-sm text-muted-foreground flex items-center gap-2">
+                        <MapPin className="w-4 h-4 shrink-0" />
+                        Search unavailable — please enter details manually
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <Label htmlFor="biz-name">Business Name</Label>
+                      <Input id="biz-name" placeholder="e.g. Sharma Dental Clinic" value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Address</Label>
+                      <Input placeholder="Full business address" value={address} onChange={(e) => setAddress(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Phone Number</Label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground bg-secondary px-3 py-2 rounded-md border border-input">+91</span>
+                        <Input placeholder="98765 43210" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="flex-1" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Opening Hours</Label>
+                      <Textarea placeholder="Mon-Sat: 9 AM - 8 PM" value={hours} onChange={(e) => setHours(e.target.value)} rows={2} />
+                    </div>
+                    {manualEntry && (
+                      <button onClick={() => { setManualEntry(false); clearSelection(); }} className="text-xs text-primary hover:underline">
+                        ← Try searching again
+                      </button>
+                    )}
+                  </>
+                )}
+
+                {/* Always show these fields regardless of search mode */}
+                {(selectedPlace || manualEntry || !placesAvailable) && (
+                  <div className="space-y-2">
+                    <Label htmlFor="biz-name-manual">Business Name</Label>
+                    <Input id="biz-name-manual" placeholder="e.g. Sharma Dental Clinic" value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label>Industry</Label>
                   <Select value={industry} onValueChange={setIndustry}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select your industry" />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select your industry" /></SelectTrigger>
                     <SelectContent>
                       {industries.map((i) => (
-                        <SelectItem key={i.value} value={i.value}>
-                          {i.label}
-                        </SelectItem>
+                        <SelectItem key={i.value} value={i.value}>{i.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -300,18 +551,12 @@ const OnboardingPage = () => {
 
                 <div className="space-y-2">
                   <Label>Primary Language</Label>
-                  <p className="text-xs text-muted-foreground -mt-1">
-                    Vox will speak in this language
-                  </p>
+                  <p className="text-xs text-muted-foreground -mt-1">Vox will speak in this language</p>
                   <Select value={language} onValueChange={setLanguage}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {languages.map((l) => (
-                        <SelectItem key={l.value} value={l.value}>
-                          {l.label}
-                        </SelectItem>
+                        <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -319,22 +564,14 @@ const OnboardingPage = () => {
 
                 <div className="flex items-center justify-between rounded-lg border border-border p-4">
                   <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Also understand mixed/Hinglish speech
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Handles code-switching between Hindi and English
-                    </p>
+                    <p className="text-sm font-medium text-foreground">Also understand mixed/Hinglish speech</p>
+                    <p className="text-xs text-muted-foreground">Handles code-switching between Hindi and English</p>
                   </div>
                   <Switch checked={hinglish} onCheckedChange={setHinglish} />
                 </div>
               </div>
 
-              <Button
-                onClick={handleStep1Next}
-                disabled={saving}
-                className="w-full h-12 rounded-full text-base font-semibold"
-              >
+              <Button onClick={handleStep1Next} disabled={saving} className="w-full h-12 rounded-full text-base font-semibold">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Next <ChevronRight className="w-4 h-4" /></>}
               </Button>
             </div>
@@ -344,112 +581,94 @@ const OnboardingPage = () => {
             <div className="space-y-6">
               <div>
                 <h1 className="text-2xl font-bold text-foreground">We found your business!</h1>
-                <p className="text-muted-foreground mt-1">Vox learned this from Google Maps</p>
+                <p className="text-muted-foreground mt-1">Confirm your details below</p>
               </div>
 
-              {loading2 ? (
-                <div className="flex flex-col items-center justify-center py-16 gap-3">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  <p className="text-sm text-muted-foreground">Searching Google Maps…</p>
+              {/* Confirmation card */}
+              <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 space-y-3">
+                <span className="text-xs font-medium bg-primary/15 text-primary px-2.5 py-1 rounded-full">
+                  ✅ {selectedPlace ? "Auto-filled from Google Maps" : "Your business details"}
+                </span>
+                <div className="space-y-2 mt-3">
+                  <p className="text-sm"><span className="mr-2">🏢</span><span className="font-semibold text-foreground">{businessName || "—"}</span></p>
+                  <p className="text-sm text-muted-foreground"><span className="mr-2">📍</span>{address || "Not set"}</p>
+                  <p className="text-sm text-muted-foreground"><span className="mr-2">📞</span>{phoneNumber ? `+91 ${phoneNumber}` : "Not set"}</p>
+                  <p className="text-sm text-muted-foreground whitespace-pre-line"><span className="mr-2">🕐</span>{hours || "Not set"}</p>
                 </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* Auto-filled card */}
-                  <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-xs font-medium bg-primary/15 text-primary px-2.5 py-1 rounded-full">
-                        ✅ Auto-filled from Google Maps
-                      </span>
-                    </div>
+              </div>
 
-                    {editing ? (
-                      <div className="space-y-3">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Business Name</Label>
-                          <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Address</Label>
-                          <Input value={address} onChange={(e) => setAddress(e.target.value)} />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Phone</Label>
-                          <Input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Opening Hours</Label>
-                          <Textarea value={hours} onChange={(e) => setHours(e.target.value)} rows={3} />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <p className="font-semibold text-foreground">{businessName}</p>
-                        <p className="text-sm text-muted-foreground">{address}</p>
-                        <p className="text-sm text-muted-foreground">{phoneNumber ? `+91 ${phoneNumber}` : MOCK_BUSINESS.phone}</p>
-                        <p className="text-sm text-muted-foreground whitespace-pre-line">{hours}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Action buttons */}
-                  <div className="flex gap-3">
-                    <Button
-                      variant="ghost"
-                      onClick={() => setEditing(!editing)}
-                      className="flex-1"
-                    >
-                      {editing ? <><Check className="w-4 h-4" /> Done editing</> : <><Pencil className="w-4 h-4" /> Edit details</>}
-                    </Button>
-                    <Button
-                      onClick={handleStep2Next}
-                      disabled={saving}
-                      className="flex-1 rounded-full"
-                    >
-                      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Looks good! <ChevronRight className="w-4 h-4" /></>}
-                    </Button>
-                  </div>
-
-                  {/* Knowledge fields */}
-                  <div className="space-y-4 border-t border-border pt-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="faq">FAQ</Label>
-                      <p className="text-xs text-muted-foreground -mt-1">
-                        What are your most common customer questions?
-                      </p>
-                      <Textarea
-                        id="faq"
-                        placeholder="e.g. Do you take walk-ins? What are your consultation fees?"
-                        value={faq}
-                        onChange={(e) => setFaq(e.target.value)}
-                        rows={3}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="services">Services</Label>
-                      <p className="text-xs text-muted-foreground -mt-1">
-                        What services do you offer?
-                      </p>
-                      <Textarea
-                        id="services"
-                        placeholder="e.g. Root canal, teeth whitening, dental implants"
-                        value={services}
-                        onChange={(e) => setServices(e.target.value)}
-                        rows={3}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="notes">Additional Notes</Label>
-                      <Textarea
-                        id="notes"
-                        placeholder="Anything else Vox should know about your business"
-                        value={extraNotes}
-                        onChange={(e) => setExtraNotes(e.target.value)}
-                        rows={3}
-                      />
-                    </div>
+              {/* Editable fields */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Business Name</Label>
+                  <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Address</Label>
+                  <Input value={address} onChange={(e) => setAddress(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone Number</Label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground bg-secondary px-3 py-2 rounded-md border border-input">+91</span>
+                    <Input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="flex-1" />
                   </div>
                 </div>
-              )}
+                <div className="space-y-2">
+                  <Label>Opening Hours</Label>
+                  <Textarea value={hours} onChange={(e) => setHours(e.target.value)} rows={3} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Industry</Label>
+                  <Select value={industry} onValueChange={setIndustry}>
+                    <SelectTrigger><SelectValue placeholder="Select your industry" /></SelectTrigger>
+                    <SelectContent>
+                      {industries.map((i) => (
+                        <SelectItem key={i.value} value={i.value}>{i.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Primary Language</Label>
+                  <Select value={language} onValueChange={setLanguage}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {languages.map((l) => (
+                        <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Knowledge fields */}
+              <div className="space-y-4 border-t border-border pt-6">
+                <div className="space-y-2">
+                  <Label>FAQ</Label>
+                  <p className="text-xs text-muted-foreground -mt-1">What are your most common customer questions?</p>
+                  <Textarea placeholder="e.g. Do you take walk-ins? What are your consultation fees?" value={faq} onChange={(e) => setFaq(e.target.value)} rows={3} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Services</Label>
+                  <p className="text-xs text-muted-foreground -mt-1">What services do you offer?</p>
+                  <Textarea placeholder="e.g. Root canal, teeth whitening, dental implants" value={services} onChange={(e) => setServices(e.target.value)} rows={3} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Additional Notes</Label>
+                  <Textarea placeholder="Anything else Vox should know about your business" value={extraNotes} onChange={(e) => setExtraNotes(e.target.value)} rows={3} />
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <Button variant="ghost" onClick={() => setStep(1)} className="flex-1">
+                  <ChevronLeft className="w-4 h-4" /> Back
+                </Button>
+                <Button onClick={handleStep2Next} disabled={saving} className="flex-1 rounded-full">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Looks good! <ChevronRight className="w-4 h-4" /></>}
+                </Button>
+              </div>
             </div>
           )}
 
@@ -460,17 +679,13 @@ const OnboardingPage = () => {
                 <p className="text-muted-foreground mt-1">Here's your dedicated Vox number</p>
               </div>
 
-              {/* Big number card */}
               <div className="rounded-2xl bg-primary/10 border border-primary/30 p-8 text-center space-y-1">
                 <p className="text-3xl font-bold text-primary tracking-wide">{VOX_NUMBER}</p>
                 <p className="text-sm text-primary/70">(Your Vox number)</p>
               </div>
 
-              {/* Forwarding instructions */}
               <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-                <p className="text-sm font-medium text-foreground">
-                  Share this number with customers OR forward your existing number to it
-                </p>
+                <p className="text-sm font-medium text-foreground">Share this number with customers OR forward your existing number to it</p>
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <p className="font-medium text-foreground text-xs uppercase tracking-wider">USSD codes for call forwarding:</p>
                   <div className="grid gap-1.5 text-xs font-mono bg-secondary/50 rounded-lg p-3">
@@ -481,39 +696,26 @@ const OnboardingPage = () => {
                 </div>
               </div>
 
-              {/* Test call */}
-              <Button
-                variant="outline"
-                className="w-full h-12 rounded-full text-base"
-                onClick={() => window.open(`tel:${VOX_NUMBER.replace(/\s/g, "")}`, "_self")}
-              >
+              <Button variant="outline" className="w-full h-12 rounded-full text-base" onClick={() => window.open(`tel:${VOX_NUMBER.replace(/\s/g, "")}`, "_self")}>
                 <Phone className="w-4 h-4" /> Call Vox now to test
               </Button>
 
-              {/* WhatsApp field */}
               <div className="space-y-2">
                 <Label>📱 Where should we send call summaries?</Label>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground bg-secondary px-3 py-2 rounded-md border border-input">
-                    +91
-                  </span>
-                  <Input
-                    placeholder="WhatsApp number"
-                    value={whatsapp}
-                    onChange={(e) => setWhatsapp(e.target.value)}
-                    className="flex-1"
-                  />
+                  <span className="text-sm text-muted-foreground bg-secondary px-3 py-2 rounded-md border border-input">+91</span>
+                  <Input placeholder="WhatsApp number" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} className="flex-1" />
                 </div>
               </div>
 
-              {/* Finish CTA */}
-              <Button
-                onClick={handleFinish}
-                disabled={saving}
-                className="w-full h-14 rounded-full text-lg font-semibold"
-              >
-                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Go to my Inbox <ChevronRight className="w-5 h-5" /></>}
-              </Button>
+              <div className="flex gap-3">
+                <Button variant="ghost" onClick={() => setStep(2)}>
+                  <ChevronLeft className="w-4 h-4" /> Back
+                </Button>
+                <Button onClick={handleFinish} disabled={saving} className="flex-1 h-14 rounded-full text-lg font-semibold">
+                  {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Go to my Inbox <ChevronRight className="w-5 h-5" /></>}
+                </Button>
+              </div>
             </div>
           )}
         </div>
