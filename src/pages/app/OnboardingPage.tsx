@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2, Phone, ChevronRight, ChevronLeft, Check, Search, X, Plus, MapPin, Building } from "lucide-react";
+import { loadGoogleMaps } from "@/utils/loadGoogleMaps";
 import { toast } from "sonner";
 
 const industries = [
