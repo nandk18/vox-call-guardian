@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   CreditCard, Smartphone, Bell, Phone, MessageCircle, Mail,
-  ChevronRight, ArrowLeft, Copy, Check, ChevronDown,
+  ChevronRight, ArrowLeft, Copy, Check,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,13 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { formatIndianPhone } from "@/utils/phoneUtils";
+import ForwardingCodes from "@/components/app/ForwardingCodes";
 
 type Agent = {
   id: string;
   phone_number: string | null;
+  vox_number: string | null;
   owner_mobile: string | null;
   owner_whatsapp: string | null;
   trial_ends_at: string | null;
@@ -32,14 +35,6 @@ type Agent = {
 };
 
 type ModalType = "plan" | "phone" | "notifications" | "owner_mobile" | "owner_whatsapp" | null;
-
-const formatPhone = (num: string | null) => {
-  if (!num) return "Not set";
-  const clean = num.replace(/\D/g, "");
-  if (clean.length === 10) return `+91 ${clean.slice(0, 5)} ${clean.slice(5)}`;
-  if (clean.length === 12 && clean.startsWith("91")) return `+${clean.slice(0, 2)} ${clean.slice(2, 7)} ${clean.slice(7)}`;
-  return num;
-};
 
 const SettingsPage = () => {
   const { user, signOut } = useAuth();
@@ -54,7 +49,6 @@ const SettingsPage = () => {
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Notification toggles (stored locally on agent — for now we use owner_mobile/owner_whatsapp presence)
   const [emailNotif, setEmailNotif] = useState(true);
   const [whatsappNotif, setWhatsappNotif] = useState(true);
   const [smsNotif, setSmsNotif] = useState(false);
@@ -64,7 +58,7 @@ const SettingsPage = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("agents")
-        .select("id, phone_number, owner_mobile, owner_whatsapp, trial_ends_at, status, business_name")
+        .select("id, phone_number, vox_number, owner_mobile, owner_whatsapp, trial_ends_at, status, business_name")
         .eq("user_id", user!.id)
         .maybeSingle();
       return data as Agent | null;
@@ -72,26 +66,19 @@ const SettingsPage = () => {
     enabled: !!user,
   });
 
-  const voxNumber = agent?.phone_number || "+91 98765 XXXXX";
+  const voxNumber = agent?.vox_number || "";
   const trialEndsAt = agent?.trial_ends_at ? new Date(agent.trial_ends_at) : null;
   const daysLeft = trialEndsAt ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / 86400000)) : null;
   const isOnTrial = daysLeft !== null && daysLeft > 0;
   const phoneConnected = !!agent?.phone_number;
-
-  const cleanVoxNumber = (agent?.phone_number || "").replace(/\D/g, "");
 
   const updateAgent = async (field: string, value: string) => {
     if (!agent) return;
     setSaving(true);
     const { error } = await supabase.from("agents").update({ [field]: value }).eq("id", agent.id);
     setSaving(false);
-    if (error) {
-      toast.error("Failed to save");
-    } else {
-      toast.success("Saved");
-      refetch();
-      queryClient.invalidateQueries({ queryKey: ["agent"] });
-    }
+    if (error) toast.error("Failed to save");
+    else { toast.success("✅ Saved"); refetch(); queryClient.invalidateQueries({ queryKey: ["agent"] }); }
   };
 
   const handleCopy = (text: string) => {
@@ -101,54 +88,20 @@ const SettingsPage = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate("/login");
-  };
+  const handleSignOut = async () => { await signOut(); navigate("/login"); };
 
   const settingRows = [
-    {
-      key: "plan",
-      icon: <CreditCard className="w-5 h-5 text-primary" />,
-      label: "Manage Plan",
-      desc: "Change plan & manage billing",
-      onClick: () => setActiveModal("plan"),
-    },
-    {
-      key: "phone",
-      icon: <Smartphone className="w-5 h-5 text-blue-400" />,
-      label: "Phone Number",
-      desc: "Change where Vox answers calls",
-      onClick: () => setPhoneScreen(true),
-    },
-    {
-      key: "notifications",
-      icon: <Bell className="w-5 h-5 text-yellow-400" />,
-      label: "Notifications",
-      desc: "Choose how you receive call summaries",
-      onClick: () => setActiveModal("notifications"),
-    },
-    {
-      key: "owner_mobile",
-      icon: <Phone className="w-5 h-5 text-emerald-400" />,
-      label: "Owner Mobile",
-      desc: formatPhone(agent?.owner_mobile ?? null),
-      onClick: () => { setEditValue(agent?.owner_mobile || ""); setActiveModal("owner_mobile"); },
-    },
-    {
-      key: "owner_whatsapp",
-      icon: <MessageCircle className="w-5 h-5 text-green-400" />,
-      label: "Owner WhatsApp",
-      desc: formatPhone(agent?.owner_whatsapp ?? null),
-      onClick: () => { setEditValue(agent?.owner_whatsapp || ""); setActiveModal("owner_whatsapp"); },
-    },
+    { key: "plan", icon: <CreditCard className="w-5 h-5 text-primary" />, label: "Manage Plan", desc: "Change plan & manage billing", onClick: () => setActiveModal("plan") },
+    { key: "phone", icon: <Smartphone className="w-5 h-5 text-blue-400" />, label: "Phone Number", desc: "Configure call forwarding", onClick: () => setPhoneScreen(true) },
+    { key: "notifications", icon: <Bell className="w-5 h-5 text-yellow-400" />, label: "Notifications", desc: "Choose how you receive summaries", onClick: () => setActiveModal("notifications") },
+    { key: "owner_mobile", icon: <Phone className="w-5 h-5 text-emerald-400" />, label: "Owner Mobile", desc: formatIndianPhone(agent?.owner_mobile), onClick: () => { setEditValue(agent?.owner_mobile?.replace(/\D/g, "").replace(/^91/, "").slice(-10) || ""); setActiveModal("owner_mobile"); } },
+    { key: "owner_whatsapp", icon: <MessageCircle className="w-5 h-5 text-green-400" />, label: "Owner WhatsApp", desc: formatIndianPhone(agent?.owner_whatsapp), onClick: () => { setEditValue(agent?.owner_whatsapp?.replace(/\D/g, "").replace(/^91/, "").slice(-10) || ""); setActiveModal("owner_whatsapp"); } },
   ];
 
-  // ── Phone Number Screen ──
   if (phoneScreen) {
     return (
       <div className="max-w-[600px] mx-auto">
-        <button onClick={() => { setPhoneScreen(false); setShowForwarding(false); }} className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors">
+        <button onClick={() => { setPhoneScreen(false); setShowForwarding(false); }} className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 min-h-[44px]">
           <ArrowLeft className="w-4 h-4" /> <span className="text-sm">Back to Settings</span>
         </button>
 
@@ -160,24 +113,38 @@ const SettingsPage = () => {
           </span>
         </div>
 
-        {/* Vox Number Card */}
+        {/* Vox Number */}
         <Card className="mb-4 border-border bg-card">
           <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground mb-3">Customers can reach Vox at:</p>
-            <div className="flex items-center gap-3 mb-1">
-              <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center">
-                <Phone className="w-5 h-5 text-primary" />
-              </div>
+            <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">Your Vox number</p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center"><Phone className="w-5 h-5 text-primary" /></div>
               <div className="flex-1">
-                <p className="text-lg font-bold">{formatPhone(agent?.phone_number ?? null)}</p>
-                <p className="text-xs text-muted-foreground">(Your Vox number)</p>
+                <p className="text-lg font-bold">{formatIndianPhone(voxNumber)}</p>
+                <p className="text-xs text-muted-foreground">(Vox answers calls on this number)</p>
               </div>
-              <button onClick={() => handleCopy(voxNumber)} className="p-2 rounded-lg hover:bg-secondary transition-colors">
+              <button onClick={() => handleCopy(voxNumber)} className="p-2 rounded-lg hover:bg-secondary min-w-[44px] min-h-[44px] flex items-center justify-center">
                 {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
               </button>
             </div>
           </CardContent>
         </Card>
+
+        {/* Business Number */}
+        {agent?.phone_number && (
+          <Card className="mb-4 border-border bg-card">
+            <CardContent className="p-5">
+              <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">Your business number</p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center"><Phone className="w-5 h-5 text-muted-foreground" /></div>
+                <div className="flex-1">
+                  <p className="text-lg font-bold">{formatIndianPhone(agent.phone_number)}</p>
+                  <p className="text-xs text-muted-foreground">(Forward calls from this to your Vox number)</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Connect Card */}
         <Card className="border-border bg-card">
@@ -185,20 +152,17 @@ const SettingsPage = () => {
             {!showForwarding ? (
               <>
                 <p className="text-sm font-semibold mb-2">✨ What you can do:</p>
-                <p className="text-sm text-muted-foreground mb-5">
-                  Connect your number so customers call YOU directly. Vox answers automatically.
-                </p>
+                <p className="text-sm text-muted-foreground mb-5">Connect your number so customers call YOU directly. Vox answers automatically.</p>
 
-                {/* Flow diagram */}
-                <div className="flex items-center justify-center gap-2 mb-6">
+                <div className="flex items-center justify-center gap-2 mb-6 flex-wrap">
                   {[
-                    { emoji: "📞", label: "Customer calls you", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
-                    { emoji: "🟢", label: "Vox answers", color: "bg-primary/15 text-primary border-primary/30" },
-                    { emoji: "📱", label: "You get WhatsApp + SMS", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+                    { icon: <Phone className="w-4 h-4" />, label: "Customer calls you", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+                    { icon: <span className="text-sm font-bold text-primary">V</span>, label: "Vox answers", color: "bg-primary/15 text-primary border-primary/30" },
+                    { icon: <MessageCircle className="w-4 h-4" />, label: "You get summary", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
                   ].map((step, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <div className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl border ${step.color}`}>
-                        <span className="text-lg">{step.emoji}</span>
+                        {step.icon}
                         <span className="text-[10px] font-medium text-center leading-tight max-w-[80px]">{step.label}</span>
                       </div>
                       {i < 2 && <ChevronRight className="w-4 h-4 text-muted-foreground" />}
@@ -206,7 +170,7 @@ const SettingsPage = () => {
                   ))}
                 </div>
 
-                <Button onClick={() => setShowForwarding(true)} className="w-full bg-foreground text-background hover:bg-foreground/90 font-semibold">
+                <Button onClick={() => setShowForwarding(true)} variant="outline" className="w-full font-semibold min-h-[48px] border-border hover:border-primary">
                   Connect My Number
                 </Button>
               </>
@@ -215,26 +179,9 @@ const SettingsPage = () => {
                 <p className="text-sm font-semibold mb-1">Dial this code on your phone to forward calls to Vox:</p>
                 <p className="text-xs text-muted-foreground mb-4">Choose your carrier below:</p>
 
-                <div className="space-y-2 mb-5">
-                  {[
-                    { carrier: "Airtel", code: `*67*+91${cleanVoxNumber}#` },
-                    { carrier: "Jio", code: `**67*+91${cleanVoxNumber}#` },
-                    { carrier: "BSNL", code: `**61*+91${cleanVoxNumber}#` },
-                    { carrier: "Vi", code: `*004*+91${cleanVoxNumber}#` },
-                  ].map((c) => (
-                    <div key={c.carrier} className="flex items-center justify-between bg-secondary rounded-lg px-4 py-3">
-                      <div>
-                        <span className="text-sm font-semibold">{c.carrier}</span>
-                        <p className="text-xs text-primary font-mono mt-0.5">{c.code}</p>
-                      </div>
-                      <button onClick={() => handleCopy(c.code)} className="text-xs text-muted-foreground hover:text-foreground">
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                <ForwardingCodes voxNumber={voxNumber} />
 
-                <p className="text-xs text-muted-foreground mb-4 text-center">Once done, tap the button below to verify</p>
+                <p className="text-xs text-muted-foreground my-4 text-center">Once done, tap the button below to verify</p>
 
                 <Button
                   onClick={async () => {
@@ -247,7 +194,7 @@ const SettingsPage = () => {
                     queryClient.invalidateQueries({ queryKey: ["agent"] });
                   }}
                   disabled={saving}
-                  className="w-full"
+                  className="w-full min-h-[48px]"
                 >
                   {saving ? "Verifying..." : "✅ I've set up call forwarding"}
                 </Button>
@@ -259,100 +206,58 @@ const SettingsPage = () => {
     );
   }
 
-  // ── Main Settings ──
   return (
     <div className="max-w-[600px] mx-auto">
       <h2 className="text-2xl font-bold mb-6">Settings</h2>
 
-      {/* YOUR ACCOUNT */}
       <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-3">Your Account</p>
       <Card className="mb-8 border-border bg-card overflow-hidden">
         <CardContent className="p-0">
           {settingRows.map((row, i) => (
-            <button
-              key={row.key}
-              onClick={row.onClick}
-              className={`w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-secondary/50 transition-colors ${i > 0 ? "border-t border-border" : ""}`}
-            >
+            <button key={row.key} onClick={row.onClick} className={`w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-secondary/50 transition-colors min-h-[56px] ${i > 0 ? "border-t border-border" : ""}`}>
               <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center shrink-0">{row.icon}</div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">{row.label}</p>
-                <p className="text-xs text-muted-foreground truncate">{row.desc}</p>
-              </div>
+              <div className="flex-1 min-w-0"><p className="text-sm font-medium">{row.label}</p><p className="text-xs text-muted-foreground truncate">{row.desc}</p></div>
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
             </button>
           ))}
         </CardContent>
       </Card>
 
-      {/* ACCOUNT */}
       <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-3">Account</p>
       <Card className="mb-6 border-border bg-card overflow-hidden">
         <CardContent className="p-0">
           <div className="flex items-center gap-4 px-5 py-4">
-            <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center shrink-0">
-              <Mail className="w-5 h-5 text-muted-foreground" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">Email</p>
-              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-            </div>
+            <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center shrink-0"><Mail className="w-5 h-5 text-muted-foreground" /></div>
+            <div className="flex-1 min-w-0"><p className="text-sm font-medium">Email / Phone</p><p className="text-xs text-muted-foreground truncate">{user?.email || user?.phone || "Not set"}</p></div>
           </div>
         </CardContent>
       </Card>
 
-      <button onClick={() => setSignOutConfirm(true)} className="text-destructive text-sm font-medium hover:underline">
-        → Sign out
-      </button>
+      <button onClick={() => setSignOutConfirm(true)} className="text-destructive text-sm font-medium hover:underline min-h-[44px]">→ Sign out</button>
 
-      {/* ── Modals ── */}
-
-      {/* Plan Modal */}
+      {/* Modals */}
       <Dialog open={activeModal === "plan"} onOpenChange={(o) => !o && setActiveModal(null)}>
         <DialogContent className="bg-card border-border">
-          <DialogHeader>
-            <DialogTitle>Manage Plan</DialogTitle>
-            <DialogDescription>Your current subscription details</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Manage Plan</DialogTitle><DialogDescription>Your current subscription details</DialogDescription></DialogHeader>
           <div className="space-y-4">
-            <div className="flex items-center justify-between bg-secondary rounded-lg px-4 py-3">
-              <span className="text-sm font-medium">Current Plan</span>
-              <span className="text-sm font-bold text-primary">{isOnTrial ? "Free Trial" : "Unlimited"}</span>
-            </div>
-            {isOnTrial && trialEndsAt && (
-              <div className="flex items-center justify-between bg-secondary rounded-lg px-4 py-3">
-                <span className="text-sm font-medium">Trial Ends</span>
-                <span className="text-sm text-muted-foreground">{trialEndsAt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
-              </div>
-            )}
-            <Button className="w-full font-semibold">
-              {isOnTrial ? "Subscribe — ₹999/month" : "Manage via Razorpay →"}
-            </Button>
-            {!isOnTrial && (
-              <button className="w-full text-center text-xs text-destructive hover:underline">Cancel subscription</button>
-            )}
+            <div className="flex items-center justify-between bg-secondary rounded-lg px-4 py-3"><span className="text-sm font-medium">Current Plan</span><span className="text-sm font-bold text-primary">{isOnTrial ? "Free Trial" : "Unlimited"}</span></div>
+            {isOnTrial && trialEndsAt && <div className="flex items-center justify-between bg-secondary rounded-lg px-4 py-3"><span className="text-sm font-medium">Trial Ends</span><span className="text-sm text-muted-foreground">{trialEndsAt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span></div>}
+            <Button className="w-full font-semibold min-h-[48px]">{isOnTrial ? "Subscribe — ₹999/month" : "Manage via Razorpay →"}</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Notifications Modal */}
       <Dialog open={activeModal === "notifications"} onOpenChange={(o) => !o && setActiveModal(null)}>
         <DialogContent className="bg-card border-border">
-          <DialogHeader>
-            <DialogTitle>Notification Preferences</DialogTitle>
-            <DialogDescription>Choose how you receive call summaries</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Notification Preferences</DialogTitle><DialogDescription>Choose how you receive call summaries</DialogDescription></DialogHeader>
           <div className="space-y-5 py-2">
             {[
               { icon: "📧", label: "Email summary", checked: emailNotif, onChange: setEmailNotif },
               { icon: "💬", label: "WhatsApp summary", checked: whatsappNotif, onChange: setWhatsappNotif },
               { icon: "📱", label: "SMS summary", checked: smsNotif, onChange: setSmsNotif },
             ].map((n) => (
-              <div key={n.label} className="flex items-center justify-between">
-                <Label className="flex items-center gap-3 text-sm cursor-pointer">
-                  <span className="text-lg">{n.icon}</span>
-                  {n.label}
-                </Label>
+              <div key={n.label} className="flex items-center justify-between min-h-[44px]">
+                <Label className="flex items-center gap-3 text-sm cursor-pointer"><span className="text-lg">{n.icon}</span>{n.label}</Label>
                 <Switch checked={n.checked} onCheckedChange={n.onChange} />
               </div>
             ))}
@@ -360,72 +265,42 @@ const SettingsPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Owner Mobile Modal */}
       <Dialog open={activeModal === "owner_mobile"} onOpenChange={(o) => !o && setActiveModal(null)}>
         <DialogContent className="bg-card border-border">
-          <DialogHeader>
-            <DialogTitle>Owner Mobile</DialogTitle>
-            <DialogDescription>We send SMS summaries here</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Owner Mobile</DialogTitle><DialogDescription>We send SMS summaries here</DialogDescription></DialogHeader>
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-muted-foreground px-3 py-2 bg-secondary rounded-lg">+91</span>
-            <Input
-              placeholder="9876543210"
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              className="bg-secondary border-border"
-            />
+            <Input placeholder="9876543210" value={editValue} onChange={(e) => setEditValue(e.target.value.replace(/\D/g, "").slice(0, 10))} className="bg-secondary border-border" />
           </div>
           <DialogFooter>
-            <Button
-              onClick={async () => { await updateAgent("owner_mobile", editValue); setActiveModal(null); }}
-              disabled={saving || editValue.length < 10}
-            >
+            <Button onClick={async () => { await updateAgent("owner_mobile", `+91${editValue}`); setActiveModal(null); }} disabled={saving || editValue.length < 10} className="min-h-[44px]">
               {saving ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Owner WhatsApp Modal */}
       <Dialog open={activeModal === "owner_whatsapp"} onOpenChange={(o) => !o && setActiveModal(null)}>
         <DialogContent className="bg-card border-border">
-          <DialogHeader>
-            <DialogTitle>Owner WhatsApp</DialogTitle>
-            <DialogDescription>We send WhatsApp summaries here</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Owner WhatsApp</DialogTitle><DialogDescription>We send WhatsApp summaries here</DialogDescription></DialogHeader>
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-muted-foreground px-3 py-2 bg-secondary rounded-lg">+91</span>
-            <Input
-              placeholder="9876543210"
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              className="bg-secondary border-border"
-            />
+            <Input placeholder="9876543210" value={editValue} onChange={(e) => setEditValue(e.target.value.replace(/\D/g, "").slice(0, 10))} className="bg-secondary border-border" />
           </div>
           <DialogFooter>
-            <Button
-              onClick={async () => { await updateAgent("owner_whatsapp", editValue); setActiveModal(null); }}
-              disabled={saving || editValue.length < 10}
-            >
+            <Button onClick={async () => { await updateAgent("owner_whatsapp", `+91${editValue}`); setActiveModal(null); }} disabled={saving || editValue.length < 10} className="min-h-[44px]">
               {saving ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Sign Out Confirmation */}
       <AlertDialog open={signOutConfirm} onOpenChange={setSignOutConfirm}>
         <AlertDialogContent className="bg-card border-border">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to sign out?</AlertDialogTitle>
-            <AlertDialogDescription>You'll need to sign in again to access your Vox dashboard.</AlertDialogDescription>
-          </AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle>Are you sure you want to sign out?</AlertDialogTitle><AlertDialogDescription>You'll need to sign in again to access your Vox dashboard.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleSignOut} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Sign out
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleSignOut} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Sign out</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
