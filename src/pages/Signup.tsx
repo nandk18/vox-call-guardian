@@ -32,6 +32,8 @@ const Signup = () => {
     return () => clearInterval(t);
   }, [countdown]);
 
+  if (user) return <Navigate to="/app/inbox" replace />;
+
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (phone.length !== 10) { setError("Enter a valid 10-digit number"); return; }
