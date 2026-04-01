@@ -9,8 +9,11 @@ import ReviewsSection from "@/components/landing/ReviewsSection";
 import FAQSection from "@/components/landing/FAQSection";
 import FinalCTASection from "@/components/landing/FinalCTASection";
 import Footer from "@/components/landing/Footer";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
-const Index = () => (
+const Index = () => {
+  usePageTitle();
+  return (
   <div className="min-h-screen">
     <Navbar />
     <HeroSection />
@@ -24,6 +27,7 @@ const Index = () => (
     <FinalCTASection />
     <Footer />
   </div>
-);
+  );
+};
 
 export default Index;

@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const Login = () => {
+  usePageTitle();
   const { user } = useAuth();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);

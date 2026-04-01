@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useState, useRef, useEffect } from "react";
 import {
@@ -9,6 +9,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Inbox, Bot, Settings, Bell } from "lucide-react";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import TrialExpiredModal from "@/components/app/TrialExpiredModal";
+import OfflineBanner from "@/components/app/OfflineBanner";
+import TestPanel from "@/components/app/TestPanel";
 
 const pageTitles: Record<string, string> = {
   "/app/inbox": "Inbox",
@@ -21,8 +25,13 @@ const AppLayout = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  usePageTitle();
+
+  const isTestMode = new URLSearchParams(location.search).get("test") === "true";
 
   const email = user?.email ?? "";
   const initial = email.charAt(0).toUpperCase();
@@ -34,7 +43,7 @@ const AppLayout = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("agents")
-        .select("trial_ends_at, onboarding_complete")
+        .select("id, trial_ends_at, onboarding_complete")
         .eq("user_id", user!.id)
         .maybeSingle();
       return data;
@@ -46,7 +55,6 @@ const AppLayout = () => {
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ["unread-calls", user?.id],
     queryFn: async () => {
-      // Get agent ids for this user
       const { data: agents } = await supabase
         .from("agents")
         .select("id")
@@ -64,11 +72,33 @@ const AppLayout = () => {
     refetchInterval: 30000,
   });
 
+  // Realtime subscription for unread badge
+  const [badgePulse, setBadgePulse] = useState(false);
+  useEffect(() => {
+    if (!agent?.id) return;
+    const channel = supabase
+      .channel("layout-calls-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "calls", filter: `agent_id=eq.${agent.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["unread-calls"] });
+          queryClient.invalidateQueries({ queryKey: ["inbox-calls"] });
+          setBadgePulse(true);
+          setTimeout(() => setBadgePulse(false), 2000);
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [agent?.id, queryClient]);
+
   const trialEndsAt = agent?.trial_ends_at ? new Date(agent.trial_ends_at) : null;
   const daysLeft = trialEndsAt
     ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / 86400000))
     : null;
-  const showTrialBanner = daysLeft !== null && daysLeft <= 3;
+  const showTrialBanner = daysLeft !== null && daysLeft <= 3 && daysLeft > 0;
+  const trialExpired = trialEndsAt ? trialEndsAt.getTime() < Date.now() : false;
+  const [trialDismissed, setTrialDismissed] = useState(false);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -93,14 +123,16 @@ const AppLayout = () => {
 
   return (
     <div className="min-h-screen flex bg-background">
+      <OfflineBanner />
+      <TrialExpiredModal open={trialExpired} />
+      {isTestMode && <TestPanel />}
+
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col items-center w-[72px] border-r border-border bg-card py-4 fixed h-full z-40">
-        {/* Logo */}
         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg mb-8">
           V
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 flex flex-col items-center gap-2">
           {navItems.map((item) => (
             <Tooltip key={item.to}>
@@ -117,7 +149,7 @@ const AppLayout = () => {
                 >
                   <item.icon className="w-5 h-5" />
                   {item.badge ? (
-                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+                    <span className={`absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center ${badgePulse ? "animate-pulse" : ""}`}>
                       {item.badge > 99 ? "99+" : item.badge}
                     </span>
                   ) : null}
@@ -128,7 +160,6 @@ const AppLayout = () => {
           ))}
         </nav>
 
-        {/* Bottom */}
         <div className="flex flex-col items-center gap-3 mt-auto">
           {daysLeft !== null && (
             <Tooltip>
@@ -148,7 +179,6 @@ const AppLayout = () => {
 
       {/* Main area */}
       <div className="flex-1 md:ml-[72px] flex flex-col min-h-screen">
-        {/* Top bar */}
         <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-card/80 backdrop-blur-xl sticky top-0 z-30">
           <span className="text-primary font-bold text-lg md:hidden">Vox</span>
           <span className="hidden md:block text-primary font-bold text-lg">Vox</span>
@@ -187,16 +217,18 @@ const AppLayout = () => {
         </header>
 
         {/* Trial banner */}
-        {showTrialBanner && (
+        {showTrialBanner && !trialDismissed && (
           <div className="bg-orange-500 text-white px-4 py-2.5 flex items-center justify-between text-sm">
             <span>⚠️ Your trial ends in {daysLeft} day{daysLeft !== 1 ? "s" : ""} — subscribe to keep your Vox number</span>
-            <button className="px-4 py-1.5 bg-white text-orange-600 font-semibold rounded-full text-xs hover:bg-white/90 transition-colors">
-              Subscribe Now
-            </button>
+            <div className="flex items-center gap-2">
+              <button className="px-4 py-1.5 bg-white text-orange-600 font-semibold rounded-full text-xs hover:bg-white/90 transition-colors">
+                Subscribe Now
+              </button>
+              <button onClick={() => setTrialDismissed(true)} className="text-white/80 hover:text-white text-xs">✕</button>
+            </div>
           </div>
         )}
 
-        {/* Page content */}
         <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6">
           <Outlet />
         </main>
@@ -217,7 +249,7 @@ const AppLayout = () => {
             <div className="relative">
               <item.icon className="w-5 h-5" />
               {item.badge ? (
-                <span className="absolute -top-1.5 -right-2.5 w-4 h-4 bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full flex items-center justify-center">
+                <span className={`absolute -top-1.5 -right-2.5 w-4 h-4 bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full flex items-center justify-center ${badgePulse ? "animate-pulse" : ""}`}>
                   {item.badge > 99 ? "99+" : item.badge}
                 </span>
               ) : null}
