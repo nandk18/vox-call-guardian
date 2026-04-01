@@ -27,6 +27,7 @@ const Index = () => {
     <FinalCTASection />
     <Footer />
   </div>
-);
+  );
+};
 
 export default Index;
