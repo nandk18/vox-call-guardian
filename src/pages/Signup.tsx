@@ -26,8 +26,6 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  if (user) return <Navigate to="/app/inbox" replace />;
-
   useEffect(() => {
     if (countdown <= 0) return;
     const t = setInterval(() => setCountdown((c) => c - 1), 1000);

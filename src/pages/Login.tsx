@@ -24,8 +24,6 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  if (user) return <Navigate to="/app/inbox" replace />;
-
   // Countdown timer
   useEffect(() => {
     if (countdown <= 0) return;
