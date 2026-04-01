@@ -108,28 +108,32 @@ const OnboardingPage = () => {
   // Step 3
   const [whatsapp, setWhatsapp] = useState("");
 
-  // Check Google Places API availability
+  // Load Google Maps and init Places services
+  const [mapsLoaded, setMapsLoaded] = useState(false);
+
   useEffect(() => {
-    const checkPlaces = () => {
-      const w = window as any;
-      if (w.google?.maps?.places) {
+    loadGoogleMaps()
+      .then(() => {
+        setMapsLoaded(true);
         setPlacesAvailable(true);
-        autocompleteService.current = new w.google.maps.places.AutocompleteService();
-        if (placesDiv.current) {
-          placesService.current = new w.google.maps.places.PlacesService(placesDiv.current);
-        }
-      } else {
-        const apiKey = import.meta.env.VITE_GOOGLE_PLACES_API_KEY;
-        if (!apiKey) {
-          console.warn("VITE_GOOGLE_PLACES_API_KEY not set. Falling back to manual entry.");
-          setManualEntry(true);
-        }
-      }
-    };
-    // Check after a small delay for script loading
-    const t = setTimeout(checkPlaces, 500);
-    return () => clearTimeout(t);
+      })
+      .catch(() => {
+        setMapsLoaded(false);
+        setManualEntry(true);
+      });
   }, []);
+
+  // Init Places services once maps loaded
+  useEffect(() => {
+    if (!mapsLoaded) return;
+    const w = window as any;
+    if (w.google?.maps?.places) {
+      autocompleteService.current = new w.google.maps.places.AutocompleteService();
+      if (placesDiv.current) {
+        placesService.current = new w.google.maps.places.PlacesService(placesDiv.current);
+      }
+    }
+  }, [mapsLoaded]);
 
   // Pre-fill business name from user metadata
   useEffect(() => {
