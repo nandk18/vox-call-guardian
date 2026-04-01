@@ -246,8 +246,27 @@ const AgentPage = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      <div className="max-w-[680px] mx-auto space-y-6 pb-8">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-4 w-56" />
+          </div>
+          <Skeleton className="h-10 w-28 rounded-full" />
+        </div>
+        <Skeleton className="h-14 w-full rounded-xl" />
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <Skeleton className="h-16 w-full" />
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="flex items-center gap-3 px-5 py-4 border-t border-border">
+              <Skeleton className="w-5 h-5 rounded" />
+              <div className="flex-1 space-y-1.5">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-48" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
