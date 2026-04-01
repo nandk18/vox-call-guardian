@@ -3,8 +3,8 @@ import { useLocation } from "react-router-dom";
 
 const titles: Record<string, string> = {
   "/": "Vox — AI Phone Receptionist for India",
-  "/login": "Sign in — Vox",
-  "/signup": "Start Free Trial — Vox",
+  "/login": "Sign In — Vox",
+  "/signup": "Start Free — Vox",
   "/app/inbox": "Inbox — Vox",
   "/app/agent": "Your Agent — Vox",
   "/app/settings": "Settings — Vox",
