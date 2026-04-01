@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           bolna_agent_id: string | null
           business_name: string | null
+          compiled_prompt: string | null
           created_at: string | null
           greeting: string | null
           id: string
@@ -33,10 +34,12 @@ export type Database = {
           trial_ends_at: string | null
           user_id: string
           voice: string | null
+          vox_number: string | null
         }
         Insert: {
           bolna_agent_id?: string | null
           business_name?: string | null
+          compiled_prompt?: string | null
           created_at?: string | null
           greeting?: string | null
           id?: string
@@ -52,10 +55,12 @@ export type Database = {
           trial_ends_at?: string | null
           user_id: string
           voice?: string | null
+          vox_number?: string | null
         }
         Update: {
           bolna_agent_id?: string | null
           business_name?: string | null
+          compiled_prompt?: string | null
           created_at?: string | null
           greeting?: string | null
           id?: string
@@ -71,6 +76,7 @@ export type Database = {
           trial_ends_at?: string | null
           user_id?: string
           voice?: string | null
+          vox_number?: string | null
         }
         Relationships: []
       }
