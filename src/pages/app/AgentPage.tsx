@@ -315,17 +315,20 @@ const AgentPage = () => {
           </button>
         </div>
 
-        {isActive ? (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-            <span className="text-lg">✅</span>
-            <p className="text-sm font-semibold text-emerald-400">Your Vox agent is live</p>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
-            <div className="flex items-center gap-3"><span className="text-lg">⚠️</span><p className="text-sm font-semibold text-yellow-400">Complete your setup to go live</p></div>
-            <button onClick={() => navigate("/app/onboarding")} className="text-xs font-semibold text-yellow-300">Complete Setup →</button>
-          </div>
-        )}
+        {(() => {
+          const isSetupComplete = agent?.status === "active" || (agent?.business_name && agent.business_name.length > 0);
+          return isSetupComplete ? (
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+              <span className="text-lg">✅</span>
+              <p className="text-sm font-semibold text-emerald-400">Your Vox agent is live</p>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
+              <div className="flex items-center gap-3"><span className="text-lg">⚠️</span><p className="text-sm font-semibold text-yellow-400">Complete your setup to go live</p></div>
+              <button onClick={() => navigate("/app/onboarding")} className="text-xs font-semibold text-yellow-300">Complete Setup →</button>
+            </div>
+          );
+        })()}
 
         {/* Preferences */}
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
