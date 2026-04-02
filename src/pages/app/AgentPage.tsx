@@ -207,6 +207,13 @@ const AgentPage = () => {
       // Recompile knowledge
       await recompileKnowledge(agentFields as any, knowledgeFields as any);
 
+      // Fire and forget — sync to Bolna
+      if (agent.id) {
+        supabase.functions
+          .invoke('update-bolna-agent', { body: { agent_id: agent.id } })
+          .catch(console.error);
+      }
+
       toast.success("✅ Saved");
       setActiveModal(null);
     } catch { toast.error("Failed to save"); }

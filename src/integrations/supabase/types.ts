@@ -17,6 +17,7 @@ export type Database = {
       agents: {
         Row: {
           bolna_agent_id: string | null
+          bolna_phone_number_id: string | null
           business_name: string | null
           compiled_prompt: string | null
           created_at: string | null
@@ -25,10 +26,14 @@ export type Database = {
           industry: string | null
           language_auto_detect: boolean | null
           language_primary: string | null
+          notification_email: boolean | null
+          notification_sms: boolean | null
+          notification_whatsapp: boolean | null
           onboarding_complete: boolean | null
           owner_mobile: string | null
           owner_whatsapp: string | null
           phone_number: string | null
+          plan: string | null
           status: string | null
           talk_speed: string | null
           trial_ends_at: string | null
@@ -38,6 +43,7 @@ export type Database = {
         }
         Insert: {
           bolna_agent_id?: string | null
+          bolna_phone_number_id?: string | null
           business_name?: string | null
           compiled_prompt?: string | null
           created_at?: string | null
@@ -46,10 +52,14 @@ export type Database = {
           industry?: string | null
           language_auto_detect?: boolean | null
           language_primary?: string | null
+          notification_email?: boolean | null
+          notification_sms?: boolean | null
+          notification_whatsapp?: boolean | null
           onboarding_complete?: boolean | null
           owner_mobile?: string | null
           owner_whatsapp?: string | null
           phone_number?: string | null
+          plan?: string | null
           status?: string | null
           talk_speed?: string | null
           trial_ends_at?: string | null
@@ -59,6 +69,7 @@ export type Database = {
         }
         Update: {
           bolna_agent_id?: string | null
+          bolna_phone_number_id?: string | null
           business_name?: string | null
           compiled_prompt?: string | null
           created_at?: string | null
@@ -67,10 +78,14 @@ export type Database = {
           industry?: string | null
           language_auto_detect?: boolean | null
           language_primary?: string | null
+          notification_email?: boolean | null
+          notification_sms?: boolean | null
+          notification_whatsapp?: boolean | null
           onboarding_complete?: boolean | null
           owner_mobile?: string | null
           owner_whatsapp?: string | null
           phone_number?: string | null
+          plan?: string | null
           status?: string | null
           talk_speed?: string | null
           trial_ends_at?: string | null
@@ -86,11 +101,14 @@ export type Database = {
           caller_name: string | null
           caller_need: string | null
           caller_number: string | null
+          caller_urgency: string | null
           created_at: string | null
           duration_secs: number | null
           id: string
           is_read: boolean | null
+          notification_sent: boolean | null
           outcome: string | null
+          preferred_callback_time: string | null
           recording_url: string | null
           summary: string | null
           transcript: Json | null
@@ -100,11 +118,14 @@ export type Database = {
           caller_name?: string | null
           caller_need?: string | null
           caller_number?: string | null
+          caller_urgency?: string | null
           created_at?: string | null
           duration_secs?: number | null
           id?: string
           is_read?: boolean | null
+          notification_sent?: boolean | null
           outcome?: string | null
+          preferred_callback_time?: string | null
           recording_url?: string | null
           summary?: string | null
           transcript?: Json | null
@@ -114,11 +135,14 @@ export type Database = {
           caller_name?: string | null
           caller_need?: string | null
           caller_number?: string | null
+          caller_urgency?: string | null
           created_at?: string | null
           duration_secs?: number | null
           id?: string
           is_read?: boolean | null
+          notification_sent?: boolean | null
           outcome?: string | null
+          preferred_callback_time?: string | null
           recording_url?: string | null
           summary?: string | null
           transcript?: Json | null

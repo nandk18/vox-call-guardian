@@ -242,7 +242,34 @@ const SettingsPage = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between bg-secondary rounded-lg px-4 py-3"><span className="text-sm font-medium">Current Plan</span><span className="text-sm font-bold text-primary">{isOnTrial ? "Free Trial" : "Unlimited"}</span></div>
             {isOnTrial && trialEndsAt && <div className="flex items-center justify-between bg-secondary rounded-lg px-4 py-3"><span className="text-sm font-medium">Trial Ends</span><span className="text-sm text-muted-foreground">{trialEndsAt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span></div>}
-            <Button className="w-full font-semibold min-h-[48px]">{isOnTrial ? "Subscribe — ₹999/month" : "Manage via Razorpay →"}</Button>
+            <Button className="w-full font-semibold min-h-[48px]" onClick={async () => {
+              if (!isOnTrial) return;
+              // Load Razorpay script if not loaded
+              if (!(window as any).Razorpay) {
+                await new Promise<void>((resolve) => {
+                  const script = document.createElement('script');
+                  script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+                  script.onload = () => resolve();
+                  document.body.appendChild(script);
+                });
+              }
+              const options = {
+                key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_XXXXXXXXXX',
+                amount: '99900',
+                currency: 'INR',
+                name: 'Vox AI',
+                description: 'Unlimited Plan — ₹999/month',
+                notes: { agent_id: agent?.id },
+                prefill: { contact: agent?.owner_mobile || '', email: user?.email || '' },
+                theme: { color: '#00e5a0' },
+                handler: function() {
+                  toast.success('Payment successful! 🎉 Your plan is being activated...');
+                  setTimeout(() => window.location.reload(), 3000);
+                }
+              };
+              const rzp = new (window as any).Razorpay(options);
+              rzp.open();
+            }}>{isOnTrial ? "Subscribe — ₹999/month" : "Manage via Razorpay →"}</Button>
           </div>
         </DialogContent>
       </Dialog>
