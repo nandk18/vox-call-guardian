@@ -263,9 +263,11 @@ const OnboardingPage = () => {
         { business_name: businessName, industry, language_primary: language, language_auto_detect: hinglish, greeting: null },
         { address, hours, services, faq, extra_notes: extraNotes }
       );
+      const defaultGreeting = `Thank you for calling ${businessName.trim()}, how can I help you today?`;
       await supabase.from("agents").update({
         owner_whatsapp: whatsapp.trim() ? `+91${whatsapp.replace(/\D/g, "")}` : null,
         compiled_prompt: prompt,
+        greeting: defaultGreeting,
       }).eq("id", agentId);
       setShowSuccess(true);
     } catch { toast.error("Failed to save. Please try again."); }

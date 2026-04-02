@@ -111,6 +111,12 @@ const AgentPage = () => {
         .eq("user_id", user.id)
         .maybeSingle();
       if (ag) {
+        // Fix greeting template if it still contains {{business_name}}
+        if (ag.greeting?.includes('{{business_name}}') && ag.business_name) {
+          const fixedGreeting = ag.greeting.replace(/\{\{business_name\}\}/g, ag.business_name);
+          await supabase.from("agents").update({ greeting: fixedGreeting }).eq("id", ag.id);
+          ag.greeting = fixedGreeting;
+        }
         setAgent(ag);
         const { data: kn } = await supabase.from("knowledge").select("id, address, hours, faq, services, extra_notes, updated_at").eq("agent_id", ag.id).maybeSingle();
         setKnowledge(kn);
@@ -315,17 +321,20 @@ const AgentPage = () => {
           </button>
         </div>
 
-        {isActive ? (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-            <span className="text-lg">✅</span>
-            <p className="text-sm font-semibold text-emerald-400">Your Vox agent is live</p>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
-            <div className="flex items-center gap-3"><span className="text-lg">⚠️</span><p className="text-sm font-semibold text-yellow-400">Complete your setup to go live</p></div>
-            <button onClick={() => navigate("/app/onboarding")} className="text-xs font-semibold text-yellow-300">Complete Setup →</button>
-          </div>
-        )}
+        {(() => {
+          const isSetupComplete = agent?.status === "active" || (agent?.business_name && agent.business_name.length > 0);
+          return isSetupComplete ? (
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+              <span className="text-lg">✅</span>
+              <p className="text-sm font-semibold text-emerald-400">Your Vox agent is live</p>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
+              <div className="flex items-center gap-3"><span className="text-lg">⚠️</span><p className="text-sm font-semibold text-yellow-400">Complete your setup to go live</p></div>
+              <button onClick={() => navigate("/app/onboarding")} className="text-xs font-semibold text-yellow-300">Complete Setup →</button>
+            </div>
+          );
+        })()}
 
         {/* Preferences */}
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
@@ -414,7 +423,7 @@ const AgentPage = () => {
             {activeModal === "greeting" && (
               <div className="space-y-3">
                 <textarea ref={textareaRef} value={modalValue} onChange={(e) => setModalValue(e.target.value)} rows={4} className="w-full rounded-xl bg-secondary border border-border px-4 py-3 text-sm text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Thank you for calling..." />
-                <p className="text-[11px] text-muted-foreground">{"{{business_name}}"} will be replaced with your actual business name</p>
+                <p className="text-[11px] text-muted-foreground">💡 Tip: You can use {"{{business_name}}"} to always show your business name automatically</p>
                 <div className="flex flex-wrap gap-2">
                   {["{{business_name}}", "{{industry}}", "{{hours}}"].map((v) => (
                     <button key={v} onClick={() => insertVariable(v)} className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20">{v}</button>
