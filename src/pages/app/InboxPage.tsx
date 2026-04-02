@@ -287,7 +287,23 @@ const InboxPage = () => {
                 <a href={`https://wa.me/${(selectedCall.caller_number || "").replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hi, calling back re your call to ${businessName}. How can I help?`)}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 px-4 py-3 bg-secondary text-foreground rounded-xl text-sm font-semibold hover:bg-secondary/80 min-h-[48px]">
                   <MessageCircle className="w-4 h-4" /> WhatsApp
                 </a>
-                <button className="flex items-center justify-center gap-2 px-4 py-3 bg-transparent border border-border text-muted-foreground rounded-xl text-sm hover:bg-secondary min-h-[48px]">
+                <button
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-transparent border border-border text-muted-foreground rounded-xl text-sm hover:bg-secondary min-h-[48px]"
+                  onClick={async () => {
+                    try {
+                      const { data, error } = await supabase.functions.invoke('resend-summary', {
+                        body: { call_id: selectedCall.id }
+                      });
+                      if (!error && data?.success) {
+                        toast.success('Summary resent ✅');
+                      } else {
+                        toast.error('Failed to resend summary');
+                      }
+                    } catch {
+                      toast.error('Failed to resend summary');
+                    }
+                  }}
+                >
                   <RotateCcw className="w-4 h-4" /> Resend
                 </button>
                 <AlertDialog>

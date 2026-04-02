@@ -18,10 +18,21 @@ const OnboardingSuccess = ({ agentId, voxNumber }: OnboardingSuccessProps) => {
   const handleGoToInbox = async () => {
     setSaving(true);
     try {
-      await supabase
-        .from("agents")
-        .update({ onboarding_complete: true, status: "active" })
-        .eq("id", agentId);
+      // Fire EF1 — don't block on result
+      supabase.functions
+        .invoke('create-bolna-agent', {
+          body: { agent_id: agentId }
+        })
+        .then(({ data, error }) => {
+          if (error) {
+            console.error('Agent creation error:', error);
+          } else {
+            console.log('Agent created:', data?.bolna_agent_id, 'Vox number:', data?.vox_number);
+          }
+        })
+        .catch(console.error);
+
+      // Navigate immediately — don't wait
       navigate("/app/inbox");
     } catch {
       setSaving(false);
