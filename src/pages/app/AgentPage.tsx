@@ -111,6 +111,12 @@ const AgentPage = () => {
         .eq("user_id", user.id)
         .maybeSingle();
       if (ag) {
+        // Fix greeting template if it still contains {{business_name}}
+        if (ag.greeting?.includes('{{business_name}}') && ag.business_name) {
+          const fixedGreeting = ag.greeting.replace(/\{\{business_name\}\}/g, ag.business_name);
+          await supabase.from("agents").update({ greeting: fixedGreeting }).eq("id", ag.id);
+          ag.greeting = fixedGreeting;
+        }
         setAgent(ag);
         const { data: kn } = await supabase.from("knowledge").select("id, address, hours, faq, services, extra_notes, updated_at").eq("agent_id", ag.id).maybeSingle();
         setKnowledge(kn);
