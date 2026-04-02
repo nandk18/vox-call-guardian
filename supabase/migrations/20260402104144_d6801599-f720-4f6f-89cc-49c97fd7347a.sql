@@ -1,0 +1,3 @@
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS bolna_phone_number_id text, ADD COLUMN IF NOT EXISTS plan text default 'trial', ADD COLUMN IF NOT EXISTS notification_whatsapp boolean default true, ADD COLUMN IF NOT EXISTS notification_sms boolean default true, ADD COLUMN IF NOT EXISTS notification_email boolean default true;
+
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS notification_sent boolean default false, ADD COLUMN IF NOT EXISTS caller_urgency text, ADD COLUMN IF NOT EXISTS preferred_callback_time text;
