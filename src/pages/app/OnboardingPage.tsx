@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Phone, ChevronRight, ChevronLeft, Check, Search, X, Plus, MapPin, Building } from "lucide-react";
 import { loadGoogleMaps } from "@/utils/loadGoogleMaps";
-import { cleanIndianPhone, formatIndianPhone, generateVoxNumber } from "@/utils/phoneUtils";
+import { cleanIndianPhone, formatIndianPhone } from "@/utils/phoneUtils";
 import { getMixedLanguageInfo } from "@/utils/languageUtils";
 import { compileAgentKnowledge } from "@/utils/agentKnowledge";
 import { toast } from "sonner";
