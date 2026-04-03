@@ -472,8 +472,17 @@ const OnboardingPage = () => {
               </div>
 
               <div className="rounded-2xl bg-primary/10 border border-primary/30 p-8 text-center space-y-1">
-                <p className="text-3xl font-bold text-primary tracking-wide">{formatIndianPhone(voxNumber)}</p>
-                <p className="text-sm text-primary/70">(Your Vox number)</p>
+                {voxNumber ? (
+                  <>
+                    <p className="text-3xl font-bold text-primary tracking-wide">{formatIndianPhone(voxNumber)}</p>
+                    <p className="text-sm text-primary/70">(Your Vox number)</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-lg font-semibold text-muted-foreground">📞 Number pending — setting up...</p>
+                    <p className="text-sm text-muted-foreground">Your Vox number will be assigned shortly</p>
+                  </>
+                )}
               </div>
 
               <div className="rounded-xl border border-border bg-card p-5 space-y-3">
