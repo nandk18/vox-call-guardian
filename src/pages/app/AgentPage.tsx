@@ -302,7 +302,7 @@ const AgentPage = () => {
   }
 
   const isActive = agent.status === "active";
-  const voxNumber = agent.vox_number || "+91 98765 43210";
+  const voxNumber = agent.vox_number || null;
 
   const timeAgo = (dateStr: string | null) => {
     if (!dateStr) return "";
