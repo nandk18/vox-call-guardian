@@ -216,19 +216,13 @@ const OnboardingPage = () => {
         await supabase.from("agents").update(agentData).eq("id", existing.id);
         setAgentId(existing.id);
         if (existing.vox_number) setVoxNumber(existing.vox_number);
-        else {
-          const vn = generateVoxNumber();
-          await supabase.from("agents").update({ vox_number: vn }).eq("id", existing.id);
-          setVoxNumber(vn);
-        }
       } else {
-        const vn = generateVoxNumber();
         const { data: newAgent } = await supabase
           .from("agents")
-          .insert({ user_id: user!.id, ...agentData, vox_number: vn })
+          .insert({ user_id: user!.id, ...agentData })
           .select("id")
           .single();
-        if (newAgent) { setAgentId(newAgent.id); setVoxNumber(vn); }
+        if (newAgent) { setAgentId(newAgent.id); }
       }
       setStep(2);
     } catch { toast.error("Failed to save. Please try again."); }
