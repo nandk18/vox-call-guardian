@@ -17,9 +17,3 @@ export const formatIndianPhone = (num: string | null | undefined): string => {
   }
   return num;
 };
-
-export const generateVoxNumber = (): string => {
-  const prefix = Math.random() > 0.5 ? "9" : "8";
-  const rest = Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)).join("");
-  return `+91${prefix}${rest}`;
-};
