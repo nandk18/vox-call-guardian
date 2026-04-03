@@ -272,7 +272,7 @@ const OnboardingPage = () => {
     if (!agentId && user) {
       const { data: existing } = await supabase.from("agents").select("id").eq("user_id", user.id).maybeSingle();
       if (existing) await supabase.from("agents").update({ onboarding_complete: true }).eq("id", existing.id);
-      else await supabase.from("agents").insert({ user_id: user.id, business_name: businessName.trim() || "My Business", onboarding_complete: true, vox_number: generateVoxNumber() });
+      else await supabase.from("agents").insert({ user_id: user.id, business_name: businessName.trim() || "My Business", onboarding_complete: true });
     } else if (agentId) {
       await supabase.from("agents").update({ onboarding_complete: true }).eq("id", agentId);
     }

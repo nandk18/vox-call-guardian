@@ -528,9 +528,15 @@ const AgentPage = () => {
               {/* Option 1 */}
               <div className="space-y-3">
                 <p className="text-sm font-semibold">📞 Call Vox directly</p>
-                <a href={`tel:${voxNumber.replace(/\s/g, "")}`} className="w-full flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 min-h-[48px]">
-                  <Phone className="w-4 h-4" /> Call {formatIndianPhone(voxNumber)}
-                </a>
+                {voxNumber ? (
+                  <a href={`tel:${voxNumber.replace(/\s/g, "")}`} className="w-full flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 min-h-[48px]">
+                    <Phone className="w-4 h-4" /> Call {formatIndianPhone(voxNumber)}
+                  </a>
+                ) : (
+                  <div className="w-full flex items-center justify-center gap-2 py-3 bg-secondary rounded-xl text-sm text-muted-foreground min-h-[48px]">
+                    📞 Number pending — setting up...
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground text-center">Call this number from any phone to hear your agent</p>
               </div>
 
