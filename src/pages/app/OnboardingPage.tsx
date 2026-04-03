@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Phone, ChevronRight, ChevronLeft, Check, Search, X, Plus, MapPin, Building } from "lucide-react";
 import { loadGoogleMaps } from "@/utils/loadGoogleMaps";
-import { cleanIndianPhone, formatIndianPhone, generateVoxNumber } from "@/utils/phoneUtils";
+import { cleanIndianPhone, formatIndianPhone } from "@/utils/phoneUtils";
 import { getMixedLanguageInfo } from "@/utils/languageUtils";
 import { compileAgentKnowledge } from "@/utils/agentKnowledge";
 import { toast } from "sonner";
@@ -216,19 +216,13 @@ const OnboardingPage = () => {
         await supabase.from("agents").update(agentData).eq("id", existing.id);
         setAgentId(existing.id);
         if (existing.vox_number) setVoxNumber(existing.vox_number);
-        else {
-          const vn = generateVoxNumber();
-          await supabase.from("agents").update({ vox_number: vn }).eq("id", existing.id);
-          setVoxNumber(vn);
-        }
       } else {
-        const vn = generateVoxNumber();
         const { data: newAgent } = await supabase
           .from("agents")
-          .insert({ user_id: user!.id, ...agentData, vox_number: vn })
+          .insert({ user_id: user!.id, ...agentData })
           .select("id")
           .single();
-        if (newAgent) { setAgentId(newAgent.id); setVoxNumber(vn); }
+        if (newAgent) { setAgentId(newAgent.id); }
       }
       setStep(2);
     } catch { toast.error("Failed to save. Please try again."); }
@@ -278,7 +272,7 @@ const OnboardingPage = () => {
     if (!agentId && user) {
       const { data: existing } = await supabase.from("agents").select("id").eq("user_id", user.id).maybeSingle();
       if (existing) await supabase.from("agents").update({ onboarding_complete: true }).eq("id", existing.id);
-      else await supabase.from("agents").insert({ user_id: user.id, business_name: businessName.trim() || "My Business", onboarding_complete: true, vox_number: generateVoxNumber() });
+      else await supabase.from("agents").insert({ user_id: user.id, business_name: businessName.trim() || "My Business", onboarding_complete: true });
     } else if (agentId) {
       await supabase.from("agents").update({ onboarding_complete: true }).eq("id", agentId);
     }
@@ -478,8 +472,17 @@ const OnboardingPage = () => {
               </div>
 
               <div className="rounded-2xl bg-primary/10 border border-primary/30 p-8 text-center space-y-1">
-                <p className="text-3xl font-bold text-primary tracking-wide">{formatIndianPhone(voxNumber)}</p>
-                <p className="text-sm text-primary/70">(Your Vox number)</p>
+                {voxNumber ? (
+                  <>
+                    <p className="text-3xl font-bold text-primary tracking-wide">{formatIndianPhone(voxNumber)}</p>
+                    <p className="text-sm text-primary/70">(Your Vox number)</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-lg font-semibold text-muted-foreground">📞 Number pending — setting up...</p>
+                    <p className="text-sm text-muted-foreground">Your Vox number will be assigned shortly</p>
+                  </>
+                )}
               </div>
 
               <div className="rounded-xl border border-border bg-card p-5 space-y-3">

@@ -54,15 +54,23 @@
 @layer base {
   * {
     @apply border-border;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    height: 100%;
   }
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', system-ui, sans-serif;
+    height: 100%;
+    overscroll-behavior: none;
   }
 
-  html {
-    scroll-behavior: smooth;
+  #root {
+    height: 100%;
   }
 }
 
@@ -79,5 +87,10 @@
 
   .glow-green-sm {
     box-shadow: 0 0 30px 5px hsla(160, 100%, 45%, 0.1);
+  }
+
+  .scroll-container {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
   }
 }

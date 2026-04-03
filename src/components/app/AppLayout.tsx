@@ -13,6 +13,7 @@ import { usePageTitle } from "@/hooks/usePageTitle";
 import TrialExpiredModal from "@/components/app/TrialExpiredModal";
 import OfflineBanner from "@/components/app/OfflineBanner";
 import TestPanel from "@/components/app/TestPanel";
+import PWAInstallPrompt from "@/components/app/PWAInstallPrompt";
 
 const pageTitles: Record<string, string> = {
   "/app/inbox": "Inbox",
@@ -122,10 +123,11 @@ const AppLayout = () => {
   ];
 
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="h-full flex bg-background overflow-hidden">
       <OfflineBanner />
       <TrialExpiredModal open={trialExpired} />
       {isTestMode && <TestPanel />}
+      <PWAInstallPrompt />
 
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col items-center w-[72px] border-r border-border bg-card py-4 fixed h-full z-40">
@@ -178,8 +180,8 @@ const AppLayout = () => {
       </aside>
 
       {/* Main area */}
-      <div className="flex-1 md:ml-[72px] flex flex-col min-h-screen">
-        <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-card/80 backdrop-blur-xl sticky top-0 z-30">
+      <div className="flex-1 md:ml-[72px] flex flex-col h-full overflow-hidden">
+        <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-card/80 backdrop-blur-xl sticky top-0 z-30 shrink-0">
           <span className="text-primary font-bold text-lg md:hidden">Vox</span>
           <span className="hidden md:block text-primary font-bold text-lg">Vox</span>
           <span className="font-semibold text-sm absolute left-1/2 -translate-x-1/2">{pageTitle}</span>
@@ -218,7 +220,7 @@ const AppLayout = () => {
 
         {/* Trial banner */}
         {showTrialBanner && !trialDismissed && (
-          <div className="bg-orange-500 text-white px-4 py-2.5 flex items-center justify-between text-sm">
+          <div className="bg-orange-500 text-white px-4 py-2.5 flex items-center justify-between text-sm shrink-0">
             <span>⚠️ Your trial ends in {daysLeft} day{daysLeft !== 1 ? "s" : ""} — subscribe to keep your Vox number</span>
             <div className="flex items-center gap-2">
               <button className="px-4 py-1.5 bg-white text-orange-600 font-semibold rounded-full text-xs hover:bg-white/90 transition-colors">
@@ -229,13 +231,13 @@ const AppLayout = () => {
           </div>
         )}
 
-        <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden scroll-container p-4 md:p-6 pb-24 md:pb-6">
           <Outlet />
         </main>
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-card border-t border-border flex items-center justify-around z-40">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border flex items-center justify-around z-40" style={{ height: "60px", paddingBottom: "env(safe-area-inset-bottom)" }}>
         {navItems.map((item) => (
           <NavLink
             key={item.to}
