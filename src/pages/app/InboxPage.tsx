@@ -104,7 +104,7 @@ const InboxPage = () => {
         queryClient.invalidateQueries({ queryKey: ["inbox-calls"] });
         queryClient.invalidateQueries({ queryKey: ["unread-calls"] });
         const newCall = payload.new as Call;
-        toast("📞 New call from " + formatIndianPhone(newCall.caller_number), {
+        toast("📞 New call from " + formatPhoneDisplay(newCall.caller_number), {
           duration: 8000,
           action: { label: "View →", onClick: () => { setSelectedCallId(newCall.id); setMobileDetailOpen(true); } },
         });
@@ -179,7 +179,7 @@ const InboxPage = () => {
               <p className="font-semibold text-foreground">No calls yet</p>
               <p className="text-xs text-muted-foreground">Share your Vox number to get started:</p>
               <div className="flex items-center gap-2">
-                <span className="text-primary font-bold text-sm font-mono">{formatIndianPhone(voxNumber)}</span>
+                <span className="text-primary font-bold text-sm font-mono">{formatPhoneDisplay(voxNumber)}</span>
                 <button onClick={() => { navigator.clipboard.writeText(voxNumber); toast.success("Copied!"); }} className="text-muted-foreground hover:text-foreground"><Copy className="w-4 h-4" /></button>
               </div>
             </div>
@@ -197,7 +197,7 @@ const InboxPage = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <span className="text-[13px] font-semibold text-foreground truncate">
-                        {debouncedQuery ? highlightMatch(formatIndianPhone(call.caller_number), debouncedQuery) : formatIndianPhone(call.caller_number)}
+                        {debouncedQuery ? highlightMatch(formatPhoneDisplay(call.caller_number), debouncedQuery) : formatPhoneDisplay(call.caller_number)}
                       </span>
                       <span className="text-[11px] text-muted-foreground shrink-0 ml-2">{call.created_at ? timeAgo(call.created_at) : ""}</span>
                     </div>
@@ -233,7 +233,7 @@ const InboxPage = () => {
                   {selectedCall.caller_name ? selectedCall.caller_name.charAt(0).toUpperCase() : "📞"}
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-foreground">{formatIndianPhone(selectedCall.caller_number)}</p>
+                  <p className="text-lg font-bold text-foreground">{formatPhoneDisplay(selectedCall.caller_number)}</p>
                   <p className="text-xs text-muted-foreground">{selectedCall.created_at ? new Date(selectedCall.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}</p>
                 </div>
               </div>
