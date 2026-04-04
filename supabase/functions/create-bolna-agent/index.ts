@@ -70,16 +70,14 @@ Deno.serve(async (req) => {
             },
             llm_agent: {
               agent_type: 'simple_llm_agent',
-              llm_config: [
-                {
-                  model: 'gpt-4o-mini',
-                  provider: 'openai',
-                  max_tokens: 150,
-                  temperature: 0.3,
-                  request_json: false,
-                  max_input_tokens: 3000
-                }
-              ],
+              llm_config: {
+                model: 'gpt-4o-mini',
+                provider: 'openai',
+                max_tokens: 150,
+                temperature: 0.3,
+                request_json: false,
+                max_input_tokens: 3000
+              },
               max_tokens: 150,
               agent_flow_type: 'streaming',
               provider: 'openai',
