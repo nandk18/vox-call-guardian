@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../_shared/supabaseAdmin.ts'
 import { corsHeaders } from '../_shared/cors.ts'
 import { compileAgentPrompt } from '../_shared/compilePrompt.ts'
+import { getProviderConfig } from '../_shared/providers.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -11,7 +12,6 @@ Deno.serve(async (req) => {
     const { agent_id } = await req.json()
     console.log('CREATE-BOLNA-AGENT: Starting for agent_id:', agent_id)
 
-    // 1. Fetch agent + knowledge
     const { data: agent, error: agentErr } = await supabaseAdmin
       .from('agents')
       .select('*, knowledge(*)')
@@ -29,22 +29,14 @@ Deno.serve(async (req) => {
     const knowledge = agent.knowledge?.[0] || agent.knowledge || null
     console.log('CREATE-BOLNA-AGENT: Agent loaded:', { business_name: agent.business_name, industry: agent.industry, language: agent.language_primary, voice: agent.voice })
 
-    // 2. Compile prompt
     const compiled_prompt = compileAgentPrompt(agent, knowledge)
     console.log('CREATE-BOLNA-AGENT: Prompt compiled, length:', compiled_prompt.length)
 
-    // 3. Determine voice ID (nova = female, echo = male)
-    const voiceId = agent.voice?.includes('male') && !agent.voice?.includes('female') ? 'echo' : 'nova'
+    const { transcriber, synthesizer, langCode } = getProviderConfig(
+      agent.language_primary || 'hindi',
+      agent.voice || 'female'
+    )
 
-    // 4. Map language to Bolna language code
-    const langCodeMap: Record<string, string> = {
-      hindi: 'hi', english: 'en', tamil: 'ta', telugu: 'te',
-      kannada: 'kn', malayalam: 'ml', marathi: 'mr', bengali: 'bn',
-      gujarati: 'gu', punjabi: 'pa', odia: 'or'
-    }
-    const langCode = langCodeMap[agent.language_primary] || 'hi'
-
-    // 5. POST to Bolna to create agent
     const BOLNA_API_KEY = Deno.env.get('BOLNA_API_KEY') ?? ''
     const BOLNA_API_URL = Deno.env.get('BOLNA_API_URL') ?? 'https://api.bolna.ai'
     const createUrl = `${BOLNA_API_URL}/v2/agent`
@@ -53,6 +45,7 @@ Deno.serve(async (req) => {
         agent_name: `${agent.business_name} - Vox`,
         agent_type: 'IVR',
         agent_welcome_message: agent.greeting,
+        agent_hangup_prompt: 'The conversation is complete when: the caller\'s question has been answered AND you have collected their name and callback details AND you have confirmed the information will be passed to the team AND the caller has said goodbye or thanks or indicated they are done.',
         tasks: [{
           task_type: 'conversation',
           toolchain: {
@@ -62,38 +55,32 @@ Deno.serve(async (req) => {
           tools_config: {
             input: { format: 'pcm', provider: 'default' },
             output: { format: 'pcm', provider: 'default' },
-            synthesizer: {
-              provider: 'openai',
-              provider_config: { voice: voiceId, model: 'tts-1' },
-              stream: true,
-              buffer_size: 200
-            },
+            synthesizer,
             llm_agent: {
               agent_type: 'simple_llm_agent',
               llm_config: {
                 model: 'gpt-4o-mini',
                 provider: 'openai',
-                max_tokens: 150,
-                temperature: 0.3,
+                max_tokens: 100,
+                temperature: 0.1,
                 request_json: false,
-                max_input_tokens: 3000
+                max_input_tokens: 2000,
+                stream: true
               },
-              max_tokens: 150,
+              max_tokens: 100,
               agent_flow_type: 'streaming',
               provider: 'openai',
               model: 'gpt-4o-mini',
-              temperature: 0.3,
+              temperature: 0.1,
               request_json: false
             },
-            transcriber: {
-              provider: 'deepgram',
-              model: 'nova-2',
-              language: langCode,
-              stream: true
-            }
+            transcriber
           },
           task_config: {
-            hangup_after_silence: 10
+            hangup_after_silence: 8,
+            call_cancellation_prompt: null,
+            incremental_delay: 100,
+            optimize_latency: true
           }
         }]
       },
@@ -134,7 +121,7 @@ Deno.serve(async (req) => {
     const bolna_agent_id = createData.agent_id
     console.log('CREATE-BOLNA-AGENT: Agent created with bolna_agent_id:', bolna_agent_id)
 
-    // 6. Set webhook URL on Bolna agent
+    // Set webhook URL on Bolna agent
     const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/handle-call-webhook`
     console.log('BOLNA REQUEST: PATCH webhook', { url: `${BOLNA_API_URL}/v2/agent/${bolna_agent_id}`, webhookUrl })
     const webhookRes = await fetch(`${BOLNA_API_URL}/v2/agent/${bolna_agent_id}`, {
@@ -148,12 +135,12 @@ Deno.serve(async (req) => {
     const webhookData = await webhookRes.json().catch(() => null)
     console.log('BOLNA RESPONSE (webhook):', { status: webhookRes.status, ok: webhookRes.ok, body: JSON.stringify(webhookData) })
 
-    // 7. Save bolna_agent_id + compiled_prompt
+    // Save bolna_agent_id + compiled_prompt
     await supabaseAdmin.from('agents').update({
       bolna_agent_id, compiled_prompt, onboarding_complete: true, status: 'provisioning'
     }).eq('id', agent_id)
 
-    // 8. Provision phone number
+    // Provision phone number
     console.log('CREATE-BOLNA-AGENT: Triggering number provisioning...')
     const provisionRes = await fetch(
       `${Deno.env.get('SUPABASE_URL')}/functions/v1/provision-vox-number`,

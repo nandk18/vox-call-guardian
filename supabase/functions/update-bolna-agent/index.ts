@@ -2,6 +2,7 @@ import { supabaseAdmin } from '../_shared/supabaseAdmin.ts'
 import { corsHeaders } from '../_shared/cors.ts'
 import { compileAgentPrompt } from '../_shared/compilePrompt.ts'
 import { bolnaFetch } from '../_shared/bolna.ts'
+import { getProviderConfig } from '../_shared/providers.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -10,6 +11,7 @@ Deno.serve(async (req) => {
 
   try {
     const { agent_id } = await req.json()
+    console.log('UPDATE-BOLNA-AGENT: Starting for agent_id:', agent_id)
 
     const { data: agent } = await supabaseAdmin
       .from('agents')
@@ -33,19 +35,23 @@ Deno.serve(async (req) => {
 
     const knowledge = agent.knowledge?.[0] || agent.knowledge || null
     const compiled_prompt = compileAgentPrompt(agent, knowledge)
-    const voiceId = agent.voice === 'male' ? 'echo' : 'nova'
+
+    const { transcriber, synthesizer } = getProviderConfig(
+      agent.language_primary || 'hindi',
+      agent.voice || 'female'
+    )
 
     const { ok, data } = await bolnaFetch(`/v2/agent/${agent.bolna_agent_id}`, {
       method: 'PATCH',
       body: JSON.stringify({
         agent_welcome_message: agent.greeting,
         agent_prompts: { task_1: { system_prompt: compiled_prompt } },
-        synthesizer: {
-          provider: 'openai',
-          provider_config: { voice: voiceId, model: 'tts-1' }
-        }
+        synthesizer,
+        transcriber
       })
     })
+
+    console.log('UPDATE-BOLNA-AGENT: Bolna PATCH result:', JSON.stringify({ ok, data }))
 
     if (!ok) console.error('Bolna PATCH failed:', data)
 
