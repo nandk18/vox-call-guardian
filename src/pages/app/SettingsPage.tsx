@@ -209,6 +209,29 @@ const SettingsPage = () => {
           </CardContent>
         </Card>
 
+        {/* Fix Webhook */}
+        {agent?.vox_number && (
+          <button
+            onClick={async () => {
+              if (!agent?.id) return;
+              setFixingWebhook(true);
+              const { data, error } = await supabase.functions.invoke('update-webhook', {
+                body: { agent_id: agent.id }
+              });
+              if (!error && data?.success) {
+                toast.success('✅ Webhook fixed! Call summaries will now appear in your inbox.');
+              } else {
+                toast.error('Failed: ' + (data?.error || error?.message));
+              }
+              setFixingWebhook(false);
+            }}
+            disabled={fixingWebhook}
+            className="text-xs text-muted-foreground hover:text-foreground mb-4 min-h-[36px]"
+          >
+            {fixingWebhook ? '⏳ Fixing...' : '⚙️ Fix call summary delivery →'}
+          </button>
+        )}
+
         {/* Business Number */}
         {agent?.phone_number && (
           <Card className="mb-4 border-border bg-card">
