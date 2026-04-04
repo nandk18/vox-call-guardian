@@ -48,6 +48,9 @@ const SettingsPage = () => {
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [setupSuccess, setSetupSuccess] = useState<{ vox_number?: string } | null>(null);
 
   const [emailNotif, setEmailNotif] = useState(true);
   const [whatsappNotif, setWhatsappNotif] = useState(true);
@@ -113,6 +116,71 @@ const SettingsPage = () => {
           </span>
         </div>
 
+        {/* Setup Retry Card */}
+        {!agent?.vox_number && !setupSuccess && (
+          <Card className="mb-4 border border-[rgba(245,166,35,0.4)] bg-[rgba(245,166,35,0.1)]" style={{ borderRadius: 12 }}>
+            <CardContent className="p-5">
+              <p className="text-sm font-semibold mb-1">⚠️ Your Vox agent needs setup</p>
+              <p className="text-sm text-muted-foreground mb-4">Your AI agent and phone number haven't been configured yet.</p>
+              {setupError && (
+                <div className="mb-3 p-3 rounded-lg bg-destructive/10 border border-destructive/40 text-sm">
+                  <p className="font-medium text-destructive">❌ Setup failed: {setupError}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Please try again or contact support</p>
+                </div>
+              )}
+              <Button
+                onClick={async () => {
+                  if (!agent?.id) return;
+                  setSetupLoading(true);
+                  setSetupError(null);
+                  try {
+                    const { data, error } = await supabase.functions.invoke('create-bolna-agent', {
+                      body: { agent_id: agent.id }
+                    });
+                    if (error || !data?.success) {
+                      setSetupError(error?.message || data?.error || 'Unknown error');
+                    } else {
+                      setSetupSuccess({ vox_number: data.vox_number });
+                      toast.success('✅ Agent created!');
+                      setTimeout(() => {
+                        refetch();
+                        queryClient.invalidateQueries({ queryKey: ["agent"] });
+                        setSetupSuccess(null);
+                      }, 2000);
+                    }
+                  } catch (e: any) {
+                    setSetupError(e.message || 'Network error');
+                  } finally {
+                    setSetupLoading(false);
+                  }
+                }}
+                disabled={setupLoading}
+                className="w-full min-h-[48px] font-bold text-black"
+                style={{ backgroundColor: '#F5A623', borderRadius: 10 }}
+              >
+                {setupLoading ? '⏳ Creating your AI agent...' : setupError ? 'Retry' : 'Fix Now — Create Agent'}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Setup Success Card */}
+        {setupSuccess && (
+          <Card className="mb-4 border border-[rgba(0,229,160,0.4)] bg-[rgba(0,229,160,0.1)]" style={{ borderRadius: 12 }}>
+            <CardContent className="p-5">
+              <p className="text-sm font-semibold text-primary mb-2">✅ Your Vox agent is live!</p>
+              {setupSuccess.vox_number && (
+                <div className="flex items-center gap-2">
+                  <p className="text-lg font-bold font-mono text-primary">{setupSuccess.vox_number}</p>
+                  <button onClick={() => handleCopy(setupSuccess.vox_number!)} className="p-1.5 rounded hover:bg-secondary">
+                    <Copy className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Vox Number */}
         <Card className="mb-4 border-border bg-card">
           <CardContent className="p-5">
@@ -120,12 +188,22 @@ const SettingsPage = () => {
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center"><Phone className="w-5 h-5 text-primary" /></div>
               <div className="flex-1">
-                <p className="text-lg font-bold">{formatIndianPhone(voxNumber)}</p>
-                <p className="text-xs text-muted-foreground">(Vox answers calls on this number)</p>
+                {voxNumber ? (
+                  <>
+                    <p className="text-lg font-bold">{formatIndianPhone(voxNumber)}</p>
+                    <p className="text-xs text-muted-foreground">(Vox answers calls on this number)</p>
+                  </>
+                ) : (
+                  <p className="text-sm font-medium" style={{ color: '#F5A623' }}>
+                    {setupLoading ? '⏳ Setting up...' : 'Not set — use Fix Now above'}
+                  </p>
+                )}
               </div>
-              <button onClick={() => handleCopy(voxNumber)} className="p-2 rounded-lg hover:bg-secondary min-w-[44px] min-h-[44px] flex items-center justify-center">
-                {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
-              </button>
+              {voxNumber && (
+                <button onClick={() => handleCopy(voxNumber)} className="p-2 rounded-lg hover:bg-secondary min-w-[44px] min-h-[44px] flex items-center justify-center">
+                  {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
+                </button>
+              )}
             </div>
           </CardContent>
         </Card>
