@@ -20,7 +20,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { formatIndianPhone } from "@/utils/phoneUtils";
+import { formatPhoneDisplay } from "@/utils/phoneUtils";
 import ForwardingCodes from "@/components/app/ForwardingCodes";
 
 type Agent = {

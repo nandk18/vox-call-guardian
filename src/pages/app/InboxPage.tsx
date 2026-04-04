@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Search, Phone, ArrowLeft, ChevronRight, Copy, Trash2, MessageCircle, RotateCcw, Clock, X } from "lucide-react";
 import { Tables } from "@/integrations/supabase/types";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatIndianPhone } from "@/utils/phoneUtils";
+import { formatPhoneDisplay } from "@/utils/phoneUtils";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,

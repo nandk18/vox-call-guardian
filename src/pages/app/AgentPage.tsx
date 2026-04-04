@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { getMixedLanguageInfo } from "@/utils/languageUtils";
-import { formatIndianPhone } from "@/utils/phoneUtils";
+import { formatPhoneDisplay } from "@/utils/phoneUtils";
 import { compileAgentKnowledge } from "@/utils/agentKnowledge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
