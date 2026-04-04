@@ -51,6 +51,7 @@ const SettingsPage = () => {
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupSuccess, setSetupSuccess] = useState<{ vox_number?: string } | null>(null);
+  const [fixingWebhook, setFixingWebhook] = useState(false);
 
   const [emailNotif, setEmailNotif] = useState(true);
   const [whatsappNotif, setWhatsappNotif] = useState(true);
