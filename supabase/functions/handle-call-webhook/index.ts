@@ -3,9 +3,16 @@ import { corsHeaders } from '../_shared/cors.ts'
 
 function formatPhone(num: string): string {
   if (!num) return 'Unknown'
-  const clean = num.replace(/\D/g, '').replace(/^91/, '').slice(-10)
+  const clean = num.replace(/\D/g, '')
+  if (clean.startsWith('1') && clean.length === 11) {
+    return `+1 ${clean.slice(1,4)} ${clean.slice(4,7)} ${clean.slice(7)}`
+  }
+  if (clean.startsWith('91') && clean.length === 12) {
+    const n = clean.slice(2)
+    return `+91 ${n.slice(0,5)} ${n.slice(5)}`
+  }
   if (clean.length === 10) {
-    return `+91 ${clean.slice(0, 5)} ${clean.slice(5)}`
+    return `+91 ${clean.slice(0,5)} ${clean.slice(5)}`
   }
   return num
 }
@@ -17,7 +24,8 @@ function formatTimestamp(seconds: number): string {
 }
 
 async function processWebhook(payload: any) {
-  // 1. Find agent by bolna_agent_id
+  console.log('WEBHOOK PROCESS: Starting for agent_id:', payload.agent_id)
+
   const { data: agent } = await supabaseAdmin
     .from('agents')
     .select('id, user_id, business_name, owner_whatsapp, owner_mobile, notification_whatsapp, notification_sms, notification_email')
@@ -25,11 +33,12 @@ async function processWebhook(payload: any) {
     .single()
 
   if (!agent) {
-    console.error('Agent not found for bolna_agent_id:', payload.agent_id)
+    console.error('WEBHOOK: Agent not found for bolna_agent_id:', payload.agent_id)
     return
   }
 
-  // 2. Determine outcome
+  console.log('WEBHOOK: Found agent:', agent.id, agent.business_name)
+
   const duration = payload.duration || 0
   const hasTranscript = payload.transcript?.length > 0
 
@@ -44,14 +53,12 @@ async function processWebhook(payload: any) {
     outcome = 'spam'
   }
 
-  // 3. Format transcript
   const transcript = (payload.transcript || []).map((t: any, i: number) => ({
     speaker: t.role === 'assistant' ? 'vox' : 'caller',
     text: t.content || '',
     timestamp: formatTimestamp(i * 5)
   }))
 
-  // 4. Insert call
   const { data: call, error: insertErr } = await supabaseAdmin
     .from('calls')
     .insert({
@@ -73,11 +80,12 @@ async function processWebhook(payload: any) {
     .single()
 
   if (insertErr) {
-    console.error('Failed to insert call:', insertErr)
+    console.error('WEBHOOK: Failed to insert call:', insertErr)
     return
   }
 
-  // 5. Trigger send-call-summary
+  console.log('WEBHOOK: Call inserted:', call.id)
+
   await fetch(
     `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-call-summary`,
     {
@@ -92,24 +100,45 @@ async function processWebhook(payload: any) {
 }
 
 Deno.serve(async (req) => {
+  console.log('WEBHOOK HIT:', req.method, req.url)
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  let payload: any = null
   try {
-    const payload = await req.json()
-
-    // Only process completed calls
-    if (payload.status !== 'completed') {
-      return new Response(JSON.stringify({ received: true }), { status: 200 })
-    }
-
-    // Process async — return 200 immediately
-    processWebhook(payload).catch(e => console.error('Webhook processing error:', e))
-
-    return new Response(JSON.stringify({ received: true }), { status: 200 })
-  } catch (err) {
-    console.error('handle-call-webhook error:', err)
-    return new Response(JSON.stringify({ received: true }), { status: 200 })
+    const bodyText = await req.text()
+    console.log('WEBHOOK RAW BODY:', bodyText.slice(0, 500))
+    payload = JSON.parse(bodyText)
+  } catch (e) {
+    console.log('WEBHOOK: Could not parse body:', e)
+    return new Response('ok', { status: 200 })
   }
+
+  console.log('WEBHOOK PAYLOAD:', JSON.stringify({
+    status: payload?.status,
+    agent_id: payload?.agent_id,
+    call_id: payload?.call_id,
+    from_number: payload?.from_number,
+    duration: payload?.duration
+  }))
+
+  const skipStatuses = ['queued', 'initiated', 'ringing', 'in_progress', 'in-progress']
+  if (skipStatuses.includes(payload?.status?.toLowerCase())) {
+    console.log('WEBHOOK: Skipping status:', payload?.status)
+    return new Response(
+      JSON.stringify({ received: true }),
+      { status: 200 }
+    )
+  }
+
+  processWebhook(payload).catch(
+    (e) => console.error('WEBHOOK PROCESS ERROR:', e)
+  )
+
+  return new Response(
+    JSON.stringify({ received: true }),
+    { status: 200 }
+  )
 })

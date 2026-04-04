@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { getMixedLanguageInfo } from "@/utils/languageUtils";
-import { formatIndianPhone } from "@/utils/phoneUtils";
+import { formatPhoneDisplay } from "@/utils/phoneUtils";
 import { compileAgentKnowledge } from "@/utils/agentKnowledge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -367,7 +367,7 @@ const AgentPage = () => {
             <SettingRow icon="🏢" label="Company Name" value={agent.business_name} onClick={() => openModal("company")} />
             <SettingRow icon="🏷️" label="Industry" value={industries.find((i) => i.value === agent.industry)?.label} onClick={() => openModal("industry")} />
             <SettingRow icon="📍" label="Address" value={knowledge?.address} onClick={() => openModal("address")} />
-            <SettingRow icon="💬" label="WhatsApp for Summaries" value={agent.owner_whatsapp ? formatIndianPhone(agent.owner_whatsapp) : undefined} onClick={() => openModal("whatsapp")} />
+            <SettingRow icon="💬" label="WhatsApp for Summaries" value={agent.owner_whatsapp ? formatPhoneDisplay(agent.owner_whatsapp) : undefined} onClick={() => openModal("whatsapp")} />
             <SettingRow icon="🕐" label="Opening Hours" value={knowledge?.hours} onClick={() => openModal("hours")} />
             <SettingRow icon="📖" label="FAQ" value={knowledge?.faq ? (knowledge.faq.length > 40 ? knowledge.faq.slice(0, 40) + "..." : knowledge.faq) : undefined} onClick={() => openModal("faq")} />
             <SettingRow icon="🛒" label="Products & Services" value={knowledge?.services ? (knowledge.services.length > 40 ? knowledge.services.slice(0, 40) + "..." : knowledge.services) : undefined} onClick={() => openModal("services")} />
@@ -530,7 +530,7 @@ const AgentPage = () => {
                 <p className="text-sm font-semibold">📞 Call Vox directly</p>
                 {voxNumber ? (
                   <a href={`tel:${voxNumber.replace(/\s/g, "")}`} className="w-full flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 min-h-[48px]">
-                    <Phone className="w-4 h-4" /> Call {formatIndianPhone(voxNumber)}
+                    <Phone className="w-4 h-4" /> Call {formatPhoneDisplay(voxNumber)}
                   </a>
                 ) : (
                   <div className="w-full flex items-center justify-center gap-2 py-3 bg-secondary rounded-xl text-sm text-muted-foreground min-h-[48px]">

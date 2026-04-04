@@ -20,7 +20,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { formatIndianPhone } from "@/utils/phoneUtils";
+import { formatPhoneDisplay } from "@/utils/phoneUtils";
 import ForwardingCodes from "@/components/app/ForwardingCodes";
 
 type Agent = {
@@ -51,6 +51,7 @@ const SettingsPage = () => {
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupSuccess, setSetupSuccess] = useState<{ vox_number?: string } | null>(null);
+  const [fixingWebhook, setFixingWebhook] = useState(false);
 
   const [emailNotif, setEmailNotif] = useState(true);
   const [whatsappNotif, setWhatsappNotif] = useState(true);
@@ -97,8 +98,8 @@ const SettingsPage = () => {
     { key: "plan", icon: <CreditCard className="w-5 h-5 text-primary" />, label: "Manage Plan", desc: "Change plan & manage billing", onClick: () => setActiveModal("plan") },
     { key: "phone", icon: <Smartphone className="w-5 h-5 text-blue-400" />, label: "Phone Number", desc: "Configure call forwarding", onClick: () => setPhoneScreen(true) },
     { key: "notifications", icon: <Bell className="w-5 h-5 text-yellow-400" />, label: "Notifications", desc: "Choose how you receive summaries", onClick: () => setActiveModal("notifications") },
-    { key: "owner_mobile", icon: <Phone className="w-5 h-5 text-emerald-400" />, label: "Owner Mobile", desc: formatIndianPhone(agent?.owner_mobile), onClick: () => { setEditValue(agent?.owner_mobile?.replace(/\D/g, "").replace(/^91/, "").slice(-10) || ""); setActiveModal("owner_mobile"); } },
-    { key: "owner_whatsapp", icon: <MessageCircle className="w-5 h-5 text-green-400" />, label: "Owner WhatsApp", desc: formatIndianPhone(agent?.owner_whatsapp), onClick: () => { setEditValue(agent?.owner_whatsapp?.replace(/\D/g, "").replace(/^91/, "").slice(-10) || ""); setActiveModal("owner_whatsapp"); } },
+    { key: "owner_mobile", icon: <Phone className="w-5 h-5 text-emerald-400" />, label: "Owner Mobile", desc: formatPhoneDisplay(agent?.owner_mobile), onClick: () => { setEditValue(agent?.owner_mobile?.replace(/\D/g, "").replace(/^91/, "").slice(-10) || ""); setActiveModal("owner_mobile"); } },
+    { key: "owner_whatsapp", icon: <MessageCircle className="w-5 h-5 text-green-400" />, label: "Owner WhatsApp", desc: formatPhoneDisplay(agent?.owner_whatsapp), onClick: () => { setEditValue(agent?.owner_whatsapp?.replace(/\D/g, "").replace(/^91/, "").slice(-10) || ""); setActiveModal("owner_whatsapp"); } },
   ];
 
   if (phoneScreen) {
@@ -190,7 +191,7 @@ const SettingsPage = () => {
               <div className="flex-1">
                 {voxNumber ? (
                   <>
-                    <p className="text-lg font-bold">{formatIndianPhone(voxNumber)}</p>
+                    <p className="text-lg font-bold">{formatPhoneDisplay(voxNumber)}</p>
                     <p className="text-xs text-muted-foreground">(Vox answers calls on this number)</p>
                   </>
                 ) : (
@@ -208,6 +209,29 @@ const SettingsPage = () => {
           </CardContent>
         </Card>
 
+        {/* Fix Webhook */}
+        {agent?.vox_number && (
+          <button
+            onClick={async () => {
+              if (!agent?.id) return;
+              setFixingWebhook(true);
+              const { data, error } = await supabase.functions.invoke('update-webhook', {
+                body: { agent_id: agent.id }
+              });
+              if (!error && data?.success) {
+                toast.success('✅ Webhook fixed! Call summaries will now appear in your inbox.');
+              } else {
+                toast.error('Failed: ' + (data?.error || error?.message));
+              }
+              setFixingWebhook(false);
+            }}
+            disabled={fixingWebhook}
+            className="text-xs text-muted-foreground hover:text-foreground mb-4 min-h-[36px]"
+          >
+            {fixingWebhook ? '⏳ Fixing...' : '⚙️ Fix call summary delivery →'}
+          </button>
+        )}
+
         {/* Business Number */}
         {agent?.phone_number && (
           <Card className="mb-4 border-border bg-card">
@@ -216,7 +240,7 @@ const SettingsPage = () => {
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center"><Phone className="w-5 h-5 text-muted-foreground" /></div>
                 <div className="flex-1">
-                  <p className="text-lg font-bold">{formatIndianPhone(agent.phone_number)}</p>
+                  <p className="text-lg font-bold">{formatPhoneDisplay(agent.phone_number)}</p>
                   <p className="text-xs text-muted-foreground">(Forward calls from this to your Vox number)</p>
                 </div>
               </div>

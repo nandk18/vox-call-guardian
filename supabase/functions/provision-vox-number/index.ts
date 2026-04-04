@@ -125,6 +125,21 @@ Deno.serve(async (req) => {
     await supabaseAdmin.from('agents').update(updateData).eq('id', agent_id)
     console.log('PROVISION-VOX-NUMBER: Complete', { vox_number: bought.phone_number, status: updateData.status })
 
+    // Also set webhook on the Bolna agent
+    if (assignRes.ok) {
+      console.log('PROVISION-VOX-NUMBER: Setting webhook...')
+      const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/handle-call-webhook`
+      const BOLNA_API_KEY = Deno.env.get('BOLNA_API_KEY') ?? ''
+      const BOLNA_API_URL = Deno.env.get('BOLNA_API_URL') ?? 'https://api.bolna.ai'
+      const whRes = await fetch(`${BOLNA_API_URL}/v2/agent/${bolna_agent_id}`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${BOLNA_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhook_url: webhookUrl })
+      })
+      const whData = await whRes.json().catch(() => null)
+      console.log('PROVISION-VOX-NUMBER: Webhook set result:', { ok: whRes.ok, data: JSON.stringify(whData) })
+    }
+
     return new Response(
       JSON.stringify({ success: assignRes.ok, vox_number: bought.phone_number, bolna_phone_number_id: bought.id }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
