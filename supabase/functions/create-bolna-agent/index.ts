@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
     console.log('CREATE-BOLNA-AGENT: Prompt compiled, length:', compiled_prompt.length)
 
     // 3. Determine voice ID (nova = female, echo = male)
-    const voiceId = agent.voice === 'male' ? 'echo' : 'nova'
+    const voiceId = agent.voice?.includes('male') && !agent.voice?.includes('female') ? 'echo' : 'nova'
 
     // 4. Map language to Bolna language code
     const langCodeMap: Record<string, string> = {
@@ -69,6 +69,17 @@ Deno.serve(async (req) => {
               buffer_size: 200
             },
             llm_agent: {
+              agent_type: 'simple_llm_agent',
+              llm_config: [
+                {
+                  model: 'gpt-4o-mini',
+                  provider: 'openai',
+                  max_tokens: 150,
+                  temperature: 0.3,
+                  request_json: false,
+                  max_input_tokens: 3000
+                }
+              ],
               max_tokens: 150,
               agent_flow_type: 'streaming',
               provider: 'openai',
