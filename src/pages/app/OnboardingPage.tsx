@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Phone, ChevronRight, ChevronLeft, Check, Search, X, Plus, MapPin, Building } from "lucide-react";
 import { loadGoogleMaps } from "@/utils/loadGoogleMaps";
-import { cleanIndianPhone, formatIndianPhone } from "@/utils/phoneUtils";
+import { cleanIndianPhone, formatPhoneDisplay } from "@/utils/phoneUtils";
 import { getMixedLanguageInfo } from "@/utils/languageUtils";
 import { compileAgentKnowledge } from "@/utils/agentKnowledge";
 import { toast } from "sonner";
@@ -47,7 +47,7 @@ const languages = [
   { value: "malayalam", label: "മലയാളം — Malayalam" },
   { value: "marathi", label: "मराठी — Marathi" },
   { value: "bengali", label: "বাংলা — Bengali" },
-  { value: "gujarati", label: "ગુજરાતી — Gujarati" },
+  { value: "gujarati", label: "ગુજરাતી — Gujarati" },
   { value: "punjabi", label: "ਪੰਜਾਬੀ — Punjabi" },
   { value: "odia", label: "ଓଡ଼ିଆ — Odia" },
 ];
@@ -134,6 +134,8 @@ const OnboardingPage = () => {
         .from("agents")
         .select("id, business_name, industry, language_primary, language_auto_detect, phone_number, owner_whatsapp, vox_number")
         .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (agent) {
         setAgentId(agent.id);
@@ -204,14 +206,22 @@ const OnboardingPage = () => {
     if (!businessName.trim()) { toast.error("Please enter your business name"); return; }
     setSaving(true);
     try {
-      const { data: existing } = await supabase.from("agents").select("id, vox_number").eq("user_id", user!.id).maybeSingle();
-      const agentData: any = {
+      const { data: existing } = await supabase
+        .from("agents")
+        .select("id, vox_number")
+        .eq("user_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const agentData = {
         business_name: businessName.trim(),
         phone_number: phoneNumber.trim() ? `+91${phoneNumber.replace(/\D/g, "")}` : null,
         industry,
         language_primary: language,
         language_auto_detect: hinglish,
       };
+
       if (existing) {
         await supabase.from("agents").update(agentData).eq("id", existing.id);
         setAgentId(existing.id);
@@ -219,7 +229,10 @@ const OnboardingPage = () => {
       } else {
         const { data: newAgent } = await supabase
           .from("agents")
-          .insert({ user_id: user!.id, ...agentData })
+          .upsert(
+            { user_id: user!.id, ...agentData },
+            { onConflict: "user_id", ignoreDuplicates: false }
+          )
           .select("id")
           .single();
         if (newAgent) { setAgentId(newAgent.id); }
@@ -239,10 +252,17 @@ const OnboardingPage = () => {
         industry, language_primary: language,
       }).eq("id", agentId);
 
-      const { data: existing } = await supabase.from("knowledge").select("id").eq("agent_id", agentId).maybeSingle();
-      const knowledgeData = { agent_id: agentId, address: address.trim(), hours: hours.trim(), faq: faq.trim(), services: services.trim(), extra_notes: extraNotes.trim() };
-      if (existing) await supabase.from("knowledge").update(knowledgeData).eq("id", existing.id);
-      else await supabase.from("knowledge").insert(knowledgeData);
+      await supabase.from("knowledge").upsert(
+        {
+          agent_id: agentId,
+          address: address.trim(),
+          hours: hours.trim(),
+          faq: faq.trim(),
+          services: services.trim(),
+          extra_notes: extraNotes.trim(),
+        },
+        { onConflict: "agent_id" }
+      );
       setStep(3);
     } catch { toast.error("Failed to save. Please try again."); }
     finally { setSaving(false); }
@@ -252,7 +272,6 @@ const OnboardingPage = () => {
     if (!agentId) return;
     setSaving(true);
     try {
-      // Compile knowledge
       const prompt = compileAgentKnowledge(
         { business_name: businessName, industry, language_primary: language, language_auto_detect: hinglish, greeting: null },
         { address, hours, services, faq, extra_notes: extraNotes }
@@ -270,9 +289,21 @@ const OnboardingPage = () => {
 
   const handleSkip = async () => {
     if (!agentId && user) {
-      const { data: existing } = await supabase.from("agents").select("id").eq("user_id", user.id).maybeSingle();
-      if (existing) await supabase.from("agents").update({ onboarding_complete: true }).eq("id", existing.id);
-      else await supabase.from("agents").insert({ user_id: user.id, business_name: businessName.trim() || "My Business", onboarding_complete: true });
+      const { data: existing } = await supabase
+        .from("agents")
+        .select("id")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (existing) {
+        await supabase.from("agents").update({ onboarding_complete: true }).eq("id", existing.id);
+      } else {
+        await supabase.from("agents").upsert(
+          { user_id: user.id, business_name: businessName.trim() || "My Business", onboarding_complete: true },
+          { onConflict: "user_id", ignoreDuplicates: false }
+        );
+      }
     } else if (agentId) {
       await supabase.from("agents").update({ onboarding_complete: true }).eq("id", agentId);
     }
@@ -423,7 +454,7 @@ const OnboardingPage = () => {
                 <div className="space-y-2 mt-3">
                   <p className="text-sm"><span className="mr-2">🏢</span><span className="font-semibold text-foreground">{businessName || "—"}</span></p>
                   <p className="text-sm text-muted-foreground"><span className="mr-2">📍</span>{address || "Not set"}</p>
-                  <p className="text-sm text-muted-foreground"><span className="mr-2">📞</span>{phoneNumber ? formatIndianPhone(phoneNumber) : "Not set"}</p>
+                  <p className="text-sm text-muted-foreground"><span className="mr-2">📞</span>{phoneNumber ? formatPhoneDisplay(phoneNumber) : "Not set"}</p>
                   <p className="text-sm text-muted-foreground whitespace-pre-line"><span className="mr-2">🕐</span>{hours || "Not set"}</p>
                 </div>
               </div>
@@ -474,7 +505,7 @@ const OnboardingPage = () => {
               <div className="rounded-2xl bg-primary/10 border border-primary/30 p-8 text-center space-y-1">
                 {voxNumber ? (
                   <>
-                    <p className="text-3xl font-bold text-primary tracking-wide">{formatIndianPhone(voxNumber)}</p>
+                    <p className="text-3xl font-bold text-primary tracking-wide">{formatPhoneDisplay(voxNumber)}</p>
                     <p className="text-sm text-primary/70">(Your Vox number)</p>
                   </>
                 ) : (

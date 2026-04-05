@@ -32,6 +32,7 @@ type Agent = {
   trial_ends_at: string | null;
   status: string | null;
   business_name: string | null;
+  bolna_agent_id: string | null;
 };
 
 type ModalType = "plan" | "phone" | "notifications" | "owner_mobile" | "owner_whatsapp" | null;
@@ -52,6 +53,7 @@ const SettingsPage = () => {
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupSuccess, setSetupSuccess] = useState<{ vox_number?: string } | null>(null);
   const [fixingWebhook, setFixingWebhook] = useState(false);
+  const [webhookDebug, setWebhookDebug] = useState<any>(null);
 
   const [emailNotif, setEmailNotif] = useState(true);
   const [whatsappNotif, setWhatsappNotif] = useState(true);
@@ -62,8 +64,10 @@ const SettingsPage = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("agents")
-        .select("id, phone_number, vox_number, owner_mobile, owner_whatsapp, trial_ends_at, status, business_name")
+        .select("id, phone_number, vox_number, owner_mobile, owner_whatsapp, trial_ends_at, status, business_name, bolna_agent_id")
         .eq("user_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
       return data as Agent | null;
     },
@@ -172,7 +176,7 @@ const SettingsPage = () => {
               <p className="text-sm font-semibold text-primary mb-2">✅ Your Vox agent is live!</p>
               {setupSuccess.vox_number && (
                 <div className="flex items-center gap-2">
-                  <p className="text-lg font-bold font-mono text-primary">{setupSuccess.vox_number}</p>
+                  <p className="text-lg font-bold font-mono text-primary">{formatPhoneDisplay(setupSuccess.vox_number)}</p>
                   <button onClick={() => handleCopy(setupSuccess.vox_number!)} className="p-1.5 rounded hover:bg-secondary">
                     <Copy className="w-4 h-4 text-muted-foreground" />
                   </button>
@@ -210,26 +214,35 @@ const SettingsPage = () => {
         </Card>
 
         {/* Fix Webhook */}
-        {agent?.vox_number && (
-          <button
-            onClick={async () => {
-              if (!agent?.id) return;
-              setFixingWebhook(true);
-              const { data, error } = await supabase.functions.invoke('update-webhook', {
-                body: { agent_id: agent.id }
-              });
-              if (!error && data?.success) {
-                toast.success('✅ Webhook fixed! Call summaries will now appear in your inbox.');
-              } else {
-                toast.error('Failed: ' + (data?.error || error?.message));
-              }
-              setFixingWebhook(false);
-            }}
-            disabled={fixingWebhook}
-            className="text-xs text-muted-foreground hover:text-foreground mb-4 min-h-[36px]"
-          >
-            {fixingWebhook ? '⏳ Fixing...' : '⚙️ Fix call summary delivery →'}
-          </button>
+        {agent?.bolna_agent_id && (
+          <div className="mb-4">
+            <button
+              onClick={async () => {
+                if (!agent?.id) return;
+                setFixingWebhook(true);
+                setWebhookDebug(null);
+                const { data, error } = await supabase.functions.invoke('update-webhook', {
+                  body: { agent_id: agent.id }
+                });
+                setWebhookDebug(data);
+                if (!error && data?.success) {
+                  toast.success('✅ Webhook updated!');
+                } else {
+                  toast.error('Failed: ' + (data?.error || error?.message));
+                }
+                setFixingWebhook(false);
+              }}
+              disabled={fixingWebhook}
+              className="text-xs text-muted-foreground hover:text-foreground min-h-[36px]"
+            >
+              {fixingWebhook ? '⏳ Fixing...' : '⚙️ Fix call summary delivery →'}
+            </button>
+            {webhookDebug && (
+              <pre className="mt-3 text-[11px] p-3 rounded-lg overflow-auto max-h-[200px]" style={{ background: '#111', color: '#0f0' }}>
+                {JSON.stringify(webhookDebug, null, 2)}
+              </pre>
+            )}
+          </div>
         )}
 
         {/* Business Number */}
@@ -346,7 +359,6 @@ const SettingsPage = () => {
             {isOnTrial && trialEndsAt && <div className="flex items-center justify-between bg-secondary rounded-lg px-4 py-3"><span className="text-sm font-medium">Trial Ends</span><span className="text-sm text-muted-foreground">{trialEndsAt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span></div>}
             <Button className="w-full font-semibold min-h-[48px]" onClick={async () => {
               if (!isOnTrial) return;
-              // Load Razorpay script if not loaded
               if (!(window as any).Razorpay) {
                 await new Promise<void>((resolve) => {
                   const script = document.createElement('script');

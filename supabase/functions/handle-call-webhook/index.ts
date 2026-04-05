@@ -103,30 +103,43 @@ Deno.serve(async (req) => {
   console.log('WEBHOOK HIT:', req.method, req.url)
 
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+        'Access-Control-Allow-Headers': '*'
+      }
+    })
+  }
+
+  if (req.method === 'GET') {
+    return new Response(
+      JSON.stringify({ status: 'webhook active', timestamp: new Date().toISOString() }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    )
   }
 
   let payload: any = null
   try {
     const bodyText = await req.text()
-    console.log('WEBHOOK RAW BODY:', bodyText.slice(0, 500))
+    console.log('WEBHOOK BODY:', bodyText.slice(0, 1000))
     payload = JSON.parse(bodyText)
   } catch (e) {
-    console.log('WEBHOOK: Could not parse body:', e)
+    console.log('WEBHOOK non-JSON:', e)
     return new Response('ok', { status: 200 })
   }
 
-  console.log('WEBHOOK PAYLOAD:', JSON.stringify({
+  console.log('WEBHOOK PARSED:', JSON.stringify({
     status: payload?.status,
     agent_id: payload?.agent_id,
     call_id: payload?.call_id,
-    from_number: payload?.from_number,
+    from: payload?.from_number,
     duration: payload?.duration
   }))
 
   const skipStatuses = ['queued', 'initiated', 'ringing', 'in_progress', 'in-progress']
-  if (skipStatuses.includes(payload?.status?.toLowerCase())) {
-    console.log('WEBHOOK: Skipping status:', payload?.status)
+  if (payload?.status && skipStatuses.includes(payload.status.toLowerCase())) {
+    console.log('WEBHOOK skip:', payload.status)
     return new Response(
       JSON.stringify({ received: true }),
       { status: 200 }

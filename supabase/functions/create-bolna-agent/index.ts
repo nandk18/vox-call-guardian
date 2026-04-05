@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     const compiled_prompt = compileAgentPrompt(agent, knowledge)
     console.log('CREATE-BOLNA-AGENT: Prompt compiled, length:', compiled_prompt.length)
 
-    const { transcriber, synthesizer, langCode } = getProviderConfig(
+    const { transcriber, synthesizer } = getProviderConfig(
       agent.language_primary || 'hindi',
       agent.voice || 'female'
     )
@@ -121,19 +121,36 @@ Deno.serve(async (req) => {
     const bolna_agent_id = createData.agent_id
     console.log('CREATE-BOLNA-AGENT: Agent created with bolna_agent_id:', bolna_agent_id)
 
-    // Set webhook URL on Bolna agent
-    const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/handle-call-webhook`
-    console.log('BOLNA REQUEST: PATCH webhook', { url: `${BOLNA_API_URL}/v2/agent/${bolna_agent_id}`, webhookUrl })
-    const webhookRes = await fetch(`${BOLNA_API_URL}/v2/agent/${bolna_agent_id}`, {
+    // Set webhook URL on Bolna agent — try both formats
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const webhookUrl = `${supabaseUrl}/functions/v1/handle-call-webhook`
+    console.log('Setting webhook:', webhookUrl)
+
+    // Format 1 — top level
+    const wh1Res = await fetch(`${BOLNA_API_URL}/v2/agent/${bolna_agent_id}`, {
       method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${BOLNA_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Authorization': `Bearer ${BOLNA_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ webhook_url: webhookUrl })
     })
-    const webhookData = await webhookRes.json().catch(() => null)
-    console.log('BOLNA RESPONSE (webhook):', { status: webhookRes.status, ok: webhookRes.ok, body: JSON.stringify(webhookData) })
+    const wh1Data = await wh1Res.json().catch(() => null)
+    console.log('Webhook format 1:', JSON.stringify({ ok: wh1Res.ok, data: wh1Data }))
+
+    // Format 2 — inside agent_config
+    const wh2Res = await fetch(`${BOLNA_API_URL}/v2/agent/${bolna_agent_id}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${BOLNA_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_config: { webhook_url: webhookUrl } })
+    })
+    const wh2Data = await wh2Res.json().catch(() => null)
+    console.log('Webhook format 2:', JSON.stringify({ ok: wh2Res.ok, data: wh2Data }))
+
+    // Verify
+    const verifyRes = await fetch(`${BOLNA_API_URL}/v2/agent/${bolna_agent_id}`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${BOLNA_API_KEY}` }
+    })
+    const verifyData = await verifyRes.json().catch(() => null)
+    console.log('Agent after webhook set:', JSON.stringify(verifyData).slice(0, 2000))
 
     // Save bolna_agent_id + compiled_prompt
     await supabaseAdmin.from('agents').update({
@@ -143,7 +160,7 @@ Deno.serve(async (req) => {
     // Provision phone number
     console.log('CREATE-BOLNA-AGENT: Triggering number provisioning...')
     const provisionRes = await fetch(
-      `${Deno.env.get('SUPABASE_URL')}/functions/v1/provision-vox-number`,
+      `${supabaseUrl}/functions/v1/provision-vox-number`,
       {
         method: 'POST',
         headers: {

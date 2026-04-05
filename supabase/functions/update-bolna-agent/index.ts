@@ -55,6 +55,14 @@ Deno.serve(async (req) => {
 
     if (!ok) console.error('Bolna PATCH failed:', data)
 
+    // Also set webhook after every update
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const webhookUrl = `${supabaseUrl}/functions/v1/handle-call-webhook`
+    await bolnaFetch(`/v2/agent/${agent.bolna_agent_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ webhook_url: webhookUrl })
+    })
+
     await supabaseAdmin.from('agents').update({ compiled_prompt }).eq('id', agent_id)
 
     return new Response(
