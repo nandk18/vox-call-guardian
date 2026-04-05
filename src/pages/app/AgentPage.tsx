@@ -42,7 +42,7 @@ const languages = [
   { value: "malayalam", label: "മലയാളം — Malayalam" },
   { value: "marathi", label: "मराठी — Marathi" },
   { value: "bengali", label: "বাংলা — Bengali" },
-  { value: "gujarati", label: "ગુજરાતી — Gujarati" },
+  { value: "gujarati", label: "ગુજરাতી — Gujarati" },
   { value: "punjabi", label: "ਪੰਜਾਬੀ — Punjabi" },
   { value: "odia", label: "ଓଡ଼ିଆ — Odia" },
 ];
@@ -67,6 +67,8 @@ interface AgentData {
   vox_number: string | null;
   status: string | null;
   compiled_prompt: string | null;
+  onboarding_complete: boolean | null;
+  bolna_agent_id: string | null;
 }
 
 interface KnowledgeData {
@@ -107,11 +109,12 @@ const AgentPage = () => {
       setLoading(true);
       const { data: ag } = await supabase
         .from("agents")
-        .select("id, business_name, industry, greeting, voice, talk_speed, language_primary, language_auto_detect, owner_whatsapp, phone_number, vox_number, status, compiled_prompt")
+        .select("id, business_name, industry, greeting, voice, talk_speed, language_primary, language_auto_detect, owner_whatsapp, phone_number, vox_number, status, compiled_prompt, onboarding_complete, bolna_agent_id")
         .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (ag) {
-        // Fix greeting template if it still contains {{business_name}}
         if (ag.greeting?.includes('{{business_name}}') && ag.business_name) {
           const fixedGreeting = ag.greeting.replace(/\{\{business_name\}\}/g, ag.business_name);
           await supabase.from("agents").update({ greeting: fixedGreeting }).eq("id", ag.id);
@@ -199,12 +202,14 @@ const AgentPage = () => {
           await supabase.from("knowledge").update({ ...knowledgeFields, updated_at: new Date().toISOString() }).eq("id", knowledge.id);
           setKnowledge((prev) => prev ? { ...prev, ...knowledgeFields, updated_at: new Date().toISOString() } : prev);
         } else {
-          const { data } = await supabase.from("knowledge").insert({ agent_id: agent.id, ...knowledgeFields }).select("id, address, hours, faq, services, extra_notes, updated_at").single();
+          const { data } = await supabase.from("knowledge").upsert(
+            { agent_id: agent.id, ...knowledgeFields },
+            { onConflict: "agent_id" }
+          ).select("id, address, hours, faq, services, extra_notes, updated_at").single();
           if (data) setKnowledge(data);
         }
       }
 
-      // Recompile knowledge
       await recompileKnowledge(agentFields as any, knowledgeFields as any);
 
       // Fire and forget — sync to Bolna
@@ -223,7 +228,6 @@ const AgentPage = () => {
   const handleTestCall = async () => {
     if (!agent?.id) return;
     setTestLoading(true);
-    // Simulate 3s delay
     await new Promise((r) => setTimeout(r, 3000));
     const summary = `Test call: Customer asked "${testMessage || "general inquiry"}". Vox provided information about ${agent.business_name || "the business"} services and operating hours.`;
     const transcript = [
@@ -278,7 +282,8 @@ const AgentPage = () => {
     ?.replace("{{industry}}", agent.industry || "")
     ?.replace("{{hours}}", knowledge?.hours || "our business hours");
 
-  const voiceLabel = agent?.voice === "male" ? "👨 Professional Male" : "👩 Professional Female";
+  const voiceLabel = (agent?.voice || "").includes("male") && !(agent?.voice || "").includes("female")
+    ? "👨 Professional Male" : "👩 Professional Female";
   const langMixedInfo = getMixedLanguageInfo(agent?.language_primary || "hindi");
 
   if (loading) {
@@ -301,7 +306,11 @@ const AgentPage = () => {
     );
   }
 
-  const isActive = agent.status === "active";
+  // Status banner logic
+  const isLive = agent.onboarding_complete === true && !!agent.business_name && !!agent.bolna_agent_id;
+  const isSettingUp = agent.onboarding_complete === true && !agent.bolna_agent_id;
+  const needsSetup = !agent.onboarding_complete || !agent.business_name;
+
   const voxNumber = agent.vox_number || null;
 
   const timeAgo = (dateStr: string | null) => {
@@ -328,20 +337,23 @@ const AgentPage = () => {
           </button>
         </div>
 
-        {(() => {
-          const isSetupComplete = agent?.status === "active" || (agent?.business_name && agent.business_name.length > 0);
-          return isSetupComplete ? (
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-              <span className="text-lg">✅</span>
-              <p className="text-sm font-semibold text-emerald-400">Your Vox agent is live</p>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
-              <div className="flex items-center gap-3"><span className="text-lg">⚠️</span><p className="text-sm font-semibold text-yellow-400">Complete your setup to go live</p></div>
-              <button onClick={() => navigate("/app/onboarding")} className="text-xs font-semibold text-yellow-300">Complete Setup →</button>
-            </div>
-          );
-        })()}
+        {/* Status Banner */}
+        {isLive ? (
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+            <span className="text-lg">✅</span>
+            <p className="text-sm font-semibold text-emerald-400">Your Vox agent is live</p>
+          </div>
+        ) : isSettingUp ? (
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-orange-500/10 border border-orange-500/20">
+            <span className="text-lg">⏳</span>
+            <p className="text-sm font-semibold text-orange-400">Setting up your agent...</p>
+          </div>
+        ) : needsSetup ? (
+          <div className="flex items-center justify-between p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
+            <div className="flex items-center gap-3"><span className="text-lg">⚠️</span><p className="text-sm font-semibold text-yellow-400">Complete your setup to go live</p></div>
+            <button onClick={() => navigate("/app/onboarding")} className="text-xs font-semibold text-yellow-300">Complete Setup →</button>
+          </div>
+        ) : null}
 
         {/* Preferences */}
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
@@ -352,8 +364,8 @@ const AgentPage = () => {
           <div className="divide-y divide-border">
             <SettingRow icon="💬" label="Greeting Message" value={previewGreeting ? (previewGreeting.length > 50 ? previewGreeting.slice(0, 50) + "..." : previewGreeting) : undefined} onClick={() => openModal("greeting")} />
             <SettingRow icon="🎙️" label="Voice" value={voiceLabel} onClick={() => openModal("voice")} />
-            <SettingRow icon="⚡" label="Talk Speed" value={speedOptions.find((s) => s.value === agent.talk_speed)?.label} onClick={() => openModal("speed")} />
-            <SettingRow icon="🌐" label="Primary Language" value={languages.find((l) => l.value === agent.language_primary)?.label} onClick={() => openModal("language")} />
+            <SettingRow icon="⚡" label="Talk Speed" value={speedOptions.find((s) => s.value === (agent.talk_speed || "natural"))?.label} onClick={() => openModal("speed")} />
+            <SettingRow icon="🌐" label="Primary Language" value={languages.find((l) => l.value === (agent.language_primary || "english"))?.label} onClick={() => openModal("language")} />
           </div>
         </div>
 
@@ -364,11 +376,11 @@ const AgentPage = () => {
             <div><p className="text-sm font-bold text-foreground">Knowledge</p><p className="text-xs text-muted-foreground">Business information Vox uses to answer calls</p></div>
           </div>
           <div className="divide-y divide-border">
-            <SettingRow icon="🏢" label="Company Name" value={agent.business_name} onClick={() => openModal("company")} />
+            <SettingRow icon="🏢" label="Company Name" value={agent.business_name || undefined} onClick={() => openModal("company")} />
             <SettingRow icon="🏷️" label="Industry" value={industries.find((i) => i.value === agent.industry)?.label} onClick={() => openModal("industry")} />
-            <SettingRow icon="📍" label="Address" value={knowledge?.address} onClick={() => openModal("address")} />
+            <SettingRow icon="📍" label="Address" value={knowledge?.address || undefined} onClick={() => openModal("address")} />
             <SettingRow icon="💬" label="WhatsApp for Summaries" value={agent.owner_whatsapp ? formatPhoneDisplay(agent.owner_whatsapp) : undefined} onClick={() => openModal("whatsapp")} />
-            <SettingRow icon="🕐" label="Opening Hours" value={knowledge?.hours} onClick={() => openModal("hours")} />
+            <SettingRow icon="🕐" label="Opening Hours" value={knowledge?.hours || undefined} onClick={() => openModal("hours")} />
             <SettingRow icon="📖" label="FAQ" value={knowledge?.faq ? (knowledge.faq.length > 40 ? knowledge.faq.slice(0, 40) + "..." : knowledge.faq) : undefined} onClick={() => openModal("faq")} />
             <SettingRow icon="🛒" label="Products & Services" value={knowledge?.services ? (knowledge.services.length > 40 ? knowledge.services.slice(0, 40) + "..." : knowledge.services) : undefined} onClick={() => openModal("services")} />
             <SettingRow icon="📝" label="Additional Knowledge" value={knowledge?.extra_notes ? (knowledge.extra_notes.length > 40 ? knowledge.extra_notes.slice(0, 40) + "..." : knowledge.extra_notes) : undefined} onClick={() => openModal("extra_notes")} />
@@ -525,7 +537,6 @@ const AgentPage = () => {
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Option 1 */}
               <div className="space-y-3">
                 <p className="text-sm font-semibold">📞 Call Vox directly</p>
                 {voxNumber ? (
@@ -542,7 +553,6 @@ const AgentPage = () => {
 
               <div className="flex items-center gap-3"><div className="flex-1 h-px bg-border" /><span className="text-xs text-muted-foreground">or</span><div className="flex-1 h-px bg-border" /></div>
 
-              {/* Option 2 */}
               <div className="space-y-3">
                 <p className="text-sm font-semibold">🤖 Simulate a test call</p>
                 <p className="text-xs text-muted-foreground">We'll simulate a call and send you a summary</p>

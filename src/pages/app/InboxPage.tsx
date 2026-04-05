@@ -80,7 +80,13 @@ const InboxPage = () => {
   const { data: agent } = useQuery({
     queryKey: ["inbox-agent", user?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("agents").select("id, phone_number, vox_number, trial_ends_at, business_name, status").eq("user_id", user!.id).maybeSingle();
+      const { data } = await supabase
+        .from("agents")
+        .select("id, phone_number, vox_number, trial_ends_at, business_name, status")
+        .eq("user_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
       return data;
     },
     enabled: !!user,
@@ -226,7 +232,6 @@ const InboxPage = () => {
               <ArrowLeft className="w-4 h-4" /> Back to inbox
             </button>
 
-            {/* Header */}
             <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center text-foreground text-xl font-bold">
@@ -243,7 +248,6 @@ const InboxPage = () => {
               </div>
             </div>
 
-            {/* Summary */}
             <div className="bg-card rounded-2xl border border-border p-5 border-l-4 border-l-primary space-y-3">
               <h3 className="text-sm font-bold text-foreground flex items-center gap-2">✨ AI Summary</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">{selectedCall.summary || "No summary available."}</p>
@@ -253,7 +257,6 @@ const InboxPage = () => {
               </div>
             </div>
 
-            {/* Transcript */}
             <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
               <button onClick={() => setTranscriptOpen(!transcriptOpen)} className="w-full flex items-center justify-between text-sm font-bold text-foreground">
                 <span className="flex items-center gap-2">📝 Full Transcript</span>
@@ -278,7 +281,6 @@ const InboxPage = () => {
               )}
             </div>
 
-            {/* Actions */}
             <div className="bg-card rounded-2xl border border-border p-5">
               <div className="grid grid-cols-2 gap-2">
                 <a href={`tel:${selectedCall.caller_number}`} className="flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 min-h-[48px]">
@@ -313,7 +315,10 @@ const InboxPage = () => {
                     </button>
                   </AlertDialogTrigger>
                   <AlertDialogContent className="bg-card border-border">
-                    <AlertDialogHeader><AlertDialogTitle>Delete this call?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete this call?</AlertDialogTitle>
+                      <AlertDialogDescription>This will permanently remove the call record, transcript, and summary.</AlertDialogDescription>
+                    </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction onClick={() => handleDelete(selectedCall.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
@@ -329,10 +334,10 @@ const InboxPage = () => {
   );
 };
 
-const InfoRow = ({ icon, label, value }: { icon: string; label: string; value: string | null | undefined }) => (
-  <div className="flex items-start gap-2">
-    <span className="text-sm">{icon}</span>
-    <div><p className="text-[11px] text-muted-foreground">{label}</p><p className="text-sm text-foreground">{value || "Not provided"}</p></div>
+const InfoRow = ({ icon, label, value }: { icon: string; label: string; value: string | null }) => (
+  <div className="flex items-start gap-2 bg-secondary/50 rounded-lg px-3 py-2">
+    <span className="text-sm mt-0.5">{icon}</span>
+    <div className="min-w-0"><p className="text-[10px] font-semibold text-muted-foreground uppercase">{label}</p><p className="text-sm text-foreground truncate">{value || "—"}</p></div>
   </div>
 );
 

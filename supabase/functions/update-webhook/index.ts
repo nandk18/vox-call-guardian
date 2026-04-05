@@ -26,21 +26,44 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const webhookUrl = `${supabaseUrl}/functions/v1/handle-call-webhook`
 
-    console.log('Setting webhook:', webhookUrl)
-    console.log('On Bolna agent:', agent.bolna_agent_id)
+    console.log('update-webhook agent:', agent.bolna_agent_id)
+    console.log('update-webhook URL:', webhookUrl)
 
-    const { ok, data } = await bolnaFetch(
+    // Try format 1 — top level
+    const res1 = await bolnaFetch(
       `/v2/agent/${agent.bolna_agent_id}`,
       {
         method: 'PATCH',
         body: JSON.stringify({ webhook_url: webhookUrl })
       }
     )
+    console.log('Format 1:', JSON.stringify(res1))
 
-    console.log('Bolna PATCH:', { ok, data })
+    // Try format 2 — inside agent_config
+    const res2 = await bolnaFetch(
+      `/v2/agent/${agent.bolna_agent_id}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ agent_config: { webhook_url: webhookUrl } })
+      }
+    )
+    console.log('Format 2:', JSON.stringify(res2))
+
+    // GET current state to verify
+    const getRes = await bolnaFetch(
+      `/v2/agent/${agent.bolna_agent_id}`,
+      { method: 'GET' }
+    )
+    console.log('Current state:', JSON.stringify(getRes).slice(0, 2000))
 
     return new Response(
-      JSON.stringify({ success: ok, webhook_url: webhookUrl, bolna_response: data }),
+      JSON.stringify({
+        success: true,
+        webhook_url: webhookUrl,
+        format1: res1,
+        format2: res2,
+        current_agent: JSON.stringify(getRes).slice(0, 500)
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (err) {

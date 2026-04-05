@@ -24,7 +24,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
@@ -35,9 +34,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setSession(session);
         setLoading(false);
 
-        // On sign in, check onboarding status (fire and forget)
         if (event === "SIGNED_IN" && session) {
-          // Use setTimeout to avoid blocking the auth callback
           setTimeout(() => {
             checkOnboardingStatus(session);
           }, 0);
@@ -49,31 +46,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const checkOnboardingStatus = async (sess: Session) => {
-    // Don't redirect if already on auth pages or onboarding
     const path = window.location.pathname;
     if (path === "/login" || path === "/signup") {
       // Will be handled by the page's own redirect logic
     }
 
     try {
-      const { data: agent } = await supabase
+      const { data: existing } = await supabase
         .from("agents")
         .select("id, onboarding_complete")
         .eq("user_id", sess.user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-      if (!agent) {
-        // Create agent row for new user
+      if (!existing) {
+        // Only insert if truly no row exists
         await supabase.from("agents").insert({
           user_id: sess.user.id,
           business_name: sess.user.user_metadata?.business_name || "",
           onboarding_complete: false,
+          trial_ends_at: new Date(
+            Date.now() + 14 * 24 * 60 * 60 * 1000
+          ).toISOString(),
         });
         navigate("/app/onboarding");
-      } else if (!agent.onboarding_complete) {
+      } else if (!existing.onboarding_complete) {
         navigate("/app/onboarding");
       } else {
-        // Only redirect to inbox if on login/signup pages
         const currentPath = window.location.pathname;
         if (currentPath === "/login" || currentPath === "/signup" || currentPath === "/") {
           navigate("/app/inbox");
