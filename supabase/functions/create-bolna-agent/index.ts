@@ -90,25 +90,8 @@ Deno.serve(async (req) => {
                 request_json: false,
                 max_input_tokens: 2000,
                 stream: true,
-                summarization_details: {
-                  model: 'gpt-4o-mini',
-                  provider: 'openai',
-                  max_tokens: 200,
-                  summarization_prompt: `Summarize this customer call in 2-3 clear sentences for the business owner. Include: 1. Why the customer called 2. What they need or want 3. Any appointment or timing details 4. Any specific requests. Write as if briefing the business owner who will follow up with this customer.`
-                },
-                extraction_details: {
-                  model: 'gpt-4o-mini',
-                  provider: 'openai',
-                  extraction_json: {
-                    caller_name: { type: 'string', description: 'Full name of caller. null if not mentioned.' },
-                    caller_need: { type: 'string', description: 'One sentence: what the caller needs.' },
-                    preferred_time: { type: 'string', description: 'Preferred time or date. null if not mentioned.' },
-                    urgency: { type: 'string', description: 'high, medium, or low urgency.' },
-                    is_spam: { type: 'boolean', description: 'true if spam or robocall.' },
-                    callback_number: { type: 'string', description: 'Different callback number if mentioned. null otherwise.' },
-                    appointment_date: { type: 'string', description: 'Specific appointment date in YYYY-MM-DD format. null if not mentioned.' }
-                  }
-                }
+                summarization_details: 'Summarize this customer call in 2-3 clear sentences for the business owner. Include: 1) Why the customer called 2) What they need or want 3) Any appointment or timing details 4) Any specific requests. Write as if briefing the business owner who will follow up with this customer.',
+                extraction_details: 'caller_name: Full name of the caller. Return null if not mentioned. caller_need: One sentence describing what the caller needs. preferred_time: Preferred date or time for appointment. Return null if not mentioned. urgency: high if emergency or urgent. medium if they need it soon. low for general enquiry. is_spam: true if robocall or spam. false for genuine callers. callback_number: Different callback number if mentioned. null otherwise.'
               },
               max_tokens: 100,
               agent_flow_type: 'streaming',
