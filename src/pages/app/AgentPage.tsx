@@ -91,6 +91,7 @@ type ModalType =
 const AgentPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<AgentData | null>(null);
   const [knowledge, setKnowledge] = useState<KnowledgeData | null>(null);
@@ -101,7 +102,9 @@ const AgentPage = () => {
   const [showKnowledge, setShowKnowledge] = useState(false);
   const [testMessage, setTestMessage] = useState("");
   const [testLoading, setTestLoading] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const showResync = searchParams.get('resync') === 'true';
 
   useEffect(() => {
     if (!user) return;
