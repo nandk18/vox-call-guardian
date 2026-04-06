@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, ChevronRight, X, Phone } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -91,6 +91,7 @@ type ModalType =
 const AgentPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<AgentData | null>(null);
   const [knowledge, setKnowledge] = useState<KnowledgeData | null>(null);
@@ -101,7 +102,9 @@ const AgentPage = () => {
   const [showKnowledge, setShowKnowledge] = useState(false);
   const [testMessage, setTestMessage] = useState("");
   const [testLoading, setTestLoading] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const showResync = searchParams.get('resync') === 'true';
 
   useEffect(() => {
     if (!user) return;
@@ -355,6 +358,25 @@ const AgentPage = () => {
           </div>
         ) : null}
 
+        {/* Resync button — only visible with ?resync=true */}
+        {showResync && agent.bolna_agent_id && (
+          <button
+            onClick={async () => {
+              setResyncing(true);
+              const { data, error } = await supabase.functions.invoke('update-bolna-agent', { body: { agent_id: agent.id } });
+              if (!error && data?.success) {
+                toast.success('✅ Agent resynced! Language, voice and prompt updated in Bolna.');
+              } else {
+                toast.error('Resync failed: ' + (error?.message || 'Unknown error'));
+              }
+              setResyncing(false);
+            }}
+            disabled={resyncing}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            {resyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : '🔄'} Resync Agent to Bolna
+          </button>
+        )}
         {/* Preferences */}
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
           <div className="px-5 py-4 bg-blue-500/10 border-b border-border flex items-center gap-3">

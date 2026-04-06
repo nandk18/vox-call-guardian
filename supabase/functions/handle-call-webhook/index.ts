@@ -1,5 +1,4 @@
 import { supabaseAdmin } from '../_shared/supabaseAdmin.ts'
-import { corsHeaders } from '../_shared/cors.ts'
 
 function formatPhone(num: string): string {
   if (!num) return 'Unknown'
@@ -23,80 +22,140 @@ function formatTimestamp(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+function generateSummary(transcript: any[], callerNumber: string): string {
+  if (!transcript?.length) {
+    return `Call from ${callerNumber}. No conversation recorded.`
+  }
+  const callerLines = transcript
+    .filter(t => t.speaker === 'caller')
+    .map(t => t.text)
+    .filter(t => t?.length > 0)
+  if (!callerLines.length) {
+    return `Call from ${callerNumber}. Caller did not speak.`
+  }
+  return `Call from ${callerNumber}. Customer: "${callerLines.slice(0, 3).join('. ')}"`
+}
+
 async function processWebhook(payload: any) {
-  console.log('WEBHOOK PROCESS: Starting for agent_id:', payload.agent_id)
+  console.log('processWebhook: Starting', JSON.stringify({
+    id: payload?.id,
+    agent_id: payload?.agent_id,
+    status: payload?.status,
+    duration: payload?.conversation_duration
+  }))
 
-  const { data: agent } = await supabaseAdmin
-    .from('agents')
-    .select('id, user_id, business_name, owner_whatsapp, owner_mobile, notification_whatsapp, notification_sms, notification_email')
-    .eq('bolna_agent_id', payload.agent_id)
-    .single()
-
-  if (!agent) {
-    console.error('WEBHOOK: Agent not found for bolna_agent_id:', payload.agent_id)
+  const bolnaAgentId = payload?.agent_id
+  if (!bolnaAgentId) {
+    console.error('No agent_id in payload')
     return
   }
 
-  console.log('WEBHOOK: Found agent:', agent.id, agent.business_name)
+  const duration = Math.floor(payload?.conversation_duration || payload?.duration || 0)
+  const recordingUrl = payload?.recording_url || null
 
-  const duration = payload.duration || 0
-  const hasTranscript = payload.transcript?.length > 0
+  // Parse transcript — Bolna sends plain string "assistant: Hello\nuser: Hi..."
+  const transcriptRaw = payload?.transcript || ''
+  let formattedTranscript: any[] = []
 
-  let outcome = 'no_response'
-  if (duration > 5 || hasTranscript) {
-    outcome = 'answered'
-  } else if (duration === 0 && !hasTranscript) {
-    outcome = 'missed'
+  if (typeof transcriptRaw === 'string' && transcriptRaw.trim().length > 0) {
+    const lines = transcriptRaw.split('\n').filter((l: string) => l.trim().length > 0)
+    formattedTranscript = lines.map((line: string, i: number) => {
+      const isAssistant = line.toLowerCase().startsWith('assistant:')
+      const text = line.replace(/^assistant:\s*/i, '').replace(/^user:\s*/i, '').trim()
+      return {
+        speaker: isAssistant ? 'vox' : 'caller',
+        text,
+        timestamp: formatTimestamp(i * 5)
+      }
+    })
+  } else if (Array.isArray(transcriptRaw)) {
+    formattedTranscript = transcriptRaw.map((t: any, i: number) => ({
+      speaker: t.role === 'assistant' || t.role === 'agent' ? 'vox' : 'caller',
+      text: t.content || t.text || '',
+      timestamp: t.timestamp || formatTimestamp(i * 5)
+    }))
   }
 
-  if (payload.extracted_data?.spam === true || payload.extracted_data?.is_spam === true) {
-    outcome = 'spam'
+  console.log('processWebhook: Transcript:', formattedTranscript.length, 'lines')
+
+  // Extraction data
+  const extracted = payload?.extracted_data || payload?.extractions || {}
+  const callerName = extracted?.caller_name || null
+  const callerNeed = extracted?.caller_need || null
+  const urgency = extracted?.urgency || 'low'
+  const preferredTime = extracted?.preferred_time || null
+  const isSpam = extracted?.is_spam === true
+
+  // Summary
+  const callerNumber = payload?.customer_number || payload?.from_number || payload?.caller_number || 'Unknown'
+  const summary = payload?.summary || generateSummary(formattedTranscript, callerNumber)
+
+  // Outcome
+  const outcome = isSpam ? 'spam' :
+    duration > 5 ? 'answered' :
+    formattedTranscript.length > 1 ? 'answered' : 'missed'
+
+  // Find agent
+  const { data: agent, error: agentErr } = await supabaseAdmin
+    .from('agents')
+    .select('id, user_id, business_name, owner_whatsapp, owner_mobile, notification_whatsapp, notification_sms, notification_email')
+    .eq('bolna_agent_id', bolnaAgentId)
+    .maybeSingle()
+
+  if (agentErr || !agent) {
+    console.error('processWebhook: Agent not found:', bolnaAgentId, agentErr)
+    return
   }
 
-  const transcript = (payload.transcript || []).map((t: any, i: number) => ({
-    speaker: t.role === 'assistant' ? 'vox' : 'caller',
-    text: t.content || '',
-    timestamp: formatTimestamp(i * 5)
-  }))
+  console.log('processWebhook: Agent:', agent.id, agent.business_name)
 
+  // Insert call
   const { data: call, error: insertErr } = await supabaseAdmin
     .from('calls')
     .insert({
       agent_id: agent.id,
-      caller_number: payload.from_number || 'Unknown',
+      caller_number: callerNumber,
       duration_secs: duration,
       outcome,
-      transcript,
-      summary: payload.summary || '',
-      caller_name: payload.extracted_data?.caller_name || null,
-      caller_need: payload.extracted_data?.caller_need || null,
-      caller_urgency: payload.extracted_data?.urgency || 'low',
-      preferred_callback_time: payload.extracted_data?.preferred_time || null,
-      recording_url: payload.recording_url || null,
+      transcript: formattedTranscript,
+      summary,
+      caller_name: callerName,
+      caller_need: callerNeed,
+      caller_urgency: urgency,
+      preferred_callback_time: preferredTime,
+      recording_url: recordingUrl,
       is_read: false,
-      notification_sent: false
+      notification_sent: false,
+      created_at: new Date().toISOString()
     })
     .select()
     .single()
 
   if (insertErr) {
-    console.error('WEBHOOK: Failed to insert call:', insertErr)
+    console.error('processWebhook: Insert error:', insertErr)
     return
   }
 
-  console.log('WEBHOOK: Call inserted:', call.id)
+  console.log('processWebhook: Inserted:', call.id)
 
-  await fetch(
-    `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-call-summary`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-      },
-      body: JSON.stringify({ call_id: call.id, agent_id: agent.id })
-    }
-  ).catch((e) => console.error('send-call-summary trigger failed:', e))
+  // Send notifications
+  try {
+    const res = await fetch(
+      `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-call-summary`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+        },
+        body: JSON.stringify({ call_id: call.id, agent_id: agent.id })
+      }
+    )
+    const d = await res.json()
+    console.log('processWebhook: Notifications:', JSON.stringify(d))
+  } catch (e) {
+    console.error('processWebhook: Notification error:', e)
+  }
 }
 
 Deno.serve(async (req) => {
@@ -132,26 +191,18 @@ Deno.serve(async (req) => {
   console.log('WEBHOOK PARSED:', JSON.stringify({
     status: payload?.status,
     agent_id: payload?.agent_id,
-    call_id: payload?.call_id,
-    from: payload?.from_number,
-    duration: payload?.duration
+    call_id: payload?.id,
+    from: payload?.customer_number || payload?.from_number,
+    duration: payload?.conversation_duration || payload?.duration
   }))
 
   const skipStatuses = ['queued', 'initiated', 'ringing', 'in_progress', 'in-progress']
   if (payload?.status && skipStatuses.includes(payload.status.toLowerCase())) {
     console.log('WEBHOOK skip:', payload.status)
-    return new Response(
-      JSON.stringify({ received: true }),
-      { status: 200 }
-    )
+    return new Response(JSON.stringify({ received: true }), { status: 200 })
   }
 
-  processWebhook(payload).catch(
-    (e) => console.error('WEBHOOK PROCESS ERROR:', e)
-  )
+  processWebhook(payload).catch((e) => console.error('WEBHOOK PROCESS ERROR:', e))
 
-  return new Response(
-    JSON.stringify({ received: true }),
-    { status: 200 }
-  )
+  return new Response(JSON.stringify({ received: true }), { status: 200 })
 })
