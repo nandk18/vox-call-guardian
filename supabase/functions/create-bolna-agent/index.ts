@@ -32,10 +32,30 @@ Deno.serve(async (req) => {
     const compiled_prompt = compileAgentPrompt(agent, knowledge)
     console.log('CREATE-BOLNA-AGENT: Prompt compiled, length:', compiled_prompt.length)
 
-    const { transcriber, synthesizer } = getProviderConfig(
-      agent.language_primary || 'hindi',
-      agent.voice || 'female'
-    )
+    // Language config
+    const indianLanguages = [
+      'hindi', 'tamil', 'telugu', 'kannada',
+      'malayalam', 'marathi', 'bengali',
+      'gujarati', 'punjabi', 'odia'
+    ]
+    const isIndian = indianLanguages.includes(agent.language_primary)
+    const langCodeMap: Record<string, string> = {
+      english: 'en', hindi: 'hi', tamil: 'ta', telugu: 'te',
+      kannada: 'kn', malayalam: 'ml', marathi: 'mr', bengali: 'bn',
+      gujarati: 'gu', punjabi: 'pa', odia: 'or'
+    }
+    const langCode = langCodeMap[agent.language_primary] || 'en'
+
+    const transcriber = isIndian
+      ? { provider: 'deepgram', model: 'nova-2', language: 'multi', stream: true, sampling_rate: 16000, encoding: 'linear16', endpointing: 100 }
+      : { provider: 'deepgram', model: 'nova-2', language: langCode, stream: true, sampling_rate: 16000, encoding: 'linear16', endpointing: 100 }
+
+    const voiceStr = (agent.voice || '').toLowerCase()
+    const isMale = voiceStr.includes('male') && !voiceStr.includes('female')
+    const voiceId = isMale ? 'echo' : 'nova'
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const webhookUrl = `${supabaseUrl}/functions/v1/handle-call-webhook`
 
     const BOLNA_API_KEY = Deno.env.get('BOLNA_API_KEY') ?? ''
     const BOLNA_API_URL = Deno.env.get('BOLNA_API_URL') ?? 'https://api.bolna.ai'
@@ -45,17 +65,21 @@ Deno.serve(async (req) => {
         agent_name: `${agent.business_name} - Vox`,
         agent_type: 'IVR',
         agent_welcome_message: agent.greeting,
-        agent_hangup_prompt: 'The conversation is complete when: the caller\'s question has been answered AND you have collected their name and callback details AND you have confirmed the information will be passed to the team AND the caller has said goodbye or thanks or indicated they are done.',
+        webhook_url: webhookUrl,
+        agent_hangup_prompt: `End the call when ALL are true: 1. You understand what caller needs 2. You have their name 3. You confirmed callback number 4. You told them team will follow up 5. Caller said goodbye or is done. Do NOT hang up if caller is still talking or asking questions.`,
         tasks: [{
           task_type: 'conversation',
-          toolchain: {
-            execution: 'parallel',
-            pipelines: [['transcriber', 'llm', 'synthesizer']]
-          },
+          toolchain: { execution: 'parallel', pipelines: [['transcriber', 'llm', 'synthesizer']] },
           tools_config: {
             input: { format: 'pcm', provider: 'default' },
             output: { format: 'pcm', provider: 'default' },
-            synthesizer,
+            transcriber,
+            synthesizer: {
+              provider: 'openai',
+              provider_config: { voice: voiceId, model: 'tts-1' },
+              stream: true,
+              buffer_size: 100
+            },
             llm_agent: {
               agent_type: 'simple_llm_agent',
               llm_config: {
@@ -65,7 +89,26 @@ Deno.serve(async (req) => {
                 temperature: 0.1,
                 request_json: false,
                 max_input_tokens: 2000,
-                stream: true
+                stream: true,
+                summarization_details: {
+                  model: 'gpt-4o-mini',
+                  provider: 'openai',
+                  max_tokens: 200,
+                  summarization_prompt: `Summarize this customer call in 2-3 clear sentences for the business owner. Include: 1. Why the customer called 2. What they need or want 3. Any appointment or timing details 4. Any specific requests. Write as if briefing the business owner who will follow up with this customer.`
+                },
+                extraction_details: {
+                  model: 'gpt-4o-mini',
+                  provider: 'openai',
+                  extraction_json: {
+                    caller_name: { type: 'string', description: 'Full name of caller. null if not mentioned.' },
+                    caller_need: { type: 'string', description: 'One sentence: what the caller needs.' },
+                    preferred_time: { type: 'string', description: 'Preferred time or date. null if not mentioned.' },
+                    urgency: { type: 'string', description: 'high, medium, or low urgency.' },
+                    is_spam: { type: 'boolean', description: 'true if spam or robocall.' },
+                    callback_number: { type: 'string', description: 'Different callback number if mentioned. null otherwise.' },
+                    appointment_date: { type: 'string', description: 'Specific appointment date in YYYY-MM-DD format. null if not mentioned.' }
+                  }
+                }
               },
               max_tokens: 100,
               agent_flow_type: 'streaming',
@@ -73,14 +116,13 @@ Deno.serve(async (req) => {
               model: 'gpt-4o-mini',
               temperature: 0.1,
               request_json: false
-            },
-            transcriber
+            }
           },
           task_config: {
             hangup_after_silence: 8,
-            call_cancellation_prompt: null,
             incremental_delay: 100,
-            optimize_latency: true
+            number_of_words_for_interruption: 2,
+            call_cancellation_prompt: `Caller has been silent too long. Say: Thank you for calling. If you need help please call us back. Have a great day. Then hang up.`
           }
         }]
       },
@@ -89,7 +131,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log('BOLNA REQUEST:', { url: createUrl, method: 'POST', body: JSON.stringify(createBody) })
+    console.log('BOLNA REQUEST:', { url: createUrl, method: 'POST', body: JSON.stringify(createBody).slice(0, 500) })
 
     const createRes = await fetch(createUrl, {
       method: 'POST',
@@ -121,12 +163,8 @@ Deno.serve(async (req) => {
     const bolna_agent_id = createData.agent_id
     console.log('CREATE-BOLNA-AGENT: Agent created with bolna_agent_id:', bolna_agent_id)
 
-    // Set webhook URL on Bolna agent — try both formats
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const webhookUrl = `${supabaseUrl}/functions/v1/handle-call-webhook`
+    // Set webhook URL — try both formats
     console.log('Setting webhook:', webhookUrl)
-
-    // Format 1 — top level
     const wh1Res = await fetch(`${BOLNA_API_URL}/v2/agent/${bolna_agent_id}`, {
       method: 'PATCH',
       headers: { 'Authorization': `Bearer ${BOLNA_API_KEY}`, 'Content-Type': 'application/json' },
@@ -135,7 +173,6 @@ Deno.serve(async (req) => {
     const wh1Data = await wh1Res.json().catch(() => null)
     console.log('Webhook format 1:', JSON.stringify({ ok: wh1Res.ok, data: wh1Data }))
 
-    // Format 2 — inside agent_config
     const wh2Res = await fetch(`${BOLNA_API_URL}/v2/agent/${bolna_agent_id}`, {
       method: 'PATCH',
       headers: { 'Authorization': `Bearer ${BOLNA_API_KEY}`, 'Content-Type': 'application/json' },
