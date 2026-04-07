@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../_shared/supabaseAdmin.ts'
 import { corsHeaders } from '../_shared/cors.ts'
 import { compileAgentPrompt } from '../_shared/compilePrompt.ts'
+import { getProviderConfig } from '../_shared/providers.ts'
 import { bolnaFetch } from '../_shared/bolna.ts'
 
 Deno.serve(async (req) => {
@@ -10,7 +11,7 @@ Deno.serve(async (req) => {
 
   try {
     const { agent_id } = await req.json()
-    console.log('UPDATE-BOLNA-AGENT: Starting for agent_id:', agent_id)
+    console.log('update-bolna-agent: Starting for agent_id:', agent_id)
 
     const { data: agent } = await supabaseAdmin
       .from('agents')
@@ -27,133 +28,76 @@ Deno.serve(async (req) => {
 
     if (!agent.bolna_agent_id) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Bolna agent not created yet' }),
+        JSON.stringify({ success: false, error: 'No bolna_agent_id — run resync first' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    const knowledge = agent.knowledge?.[0] || agent.knowledge || null
+    const knowledge = Array.isArray(agent.knowledge)
+      ? agent.knowledge[0] || {}
+      : agent.knowledge || {}
+
     const compiled_prompt = compileAgentPrompt(agent, knowledge)
 
-    // Language config
-    const indianLanguages = [
-      'hindi', 'tamil', 'telugu', 'kannada',
-      'malayalam', 'marathi', 'bengali',
-      'gujarati', 'punjabi', 'odia'
-    ]
-    const isIndian = indianLanguages.includes(agent.language_primary)
-    const langCodeMap: Record<string, string> = {
-      english: 'en', hindi: 'hi', tamil: 'ta', telugu: 'te',
-      kannada: 'kn', malayalam: 'ml', marathi: 'mr', bengali: 'bn',
-      gujarati: 'gu', punjabi: 'pa', odia: 'or'
-    }
-    const langCode = langCodeMap[agent.language_primary] || 'en'
-
-    const transcriber = isIndian
-      ? { provider: 'deepgram', model: 'nova-2', language: 'multi', stream: true, sampling_rate: 16000, encoding: 'linear16', endpointing: 100 }
-      : { provider: 'deepgram', model: 'nova-2', language: langCode, stream: true, sampling_rate: 16000, encoding: 'linear16', endpointing: 100 }
-
-    // Voice detection
-    const voiceStr = (agent.voice || '').toLowerCase()
-    const isMale = voiceStr.includes('male') && !voiceStr.includes('female')
-    const voiceId = isMale ? 'echo' : 'nova'
+    const { synthesizer } = getProviderConfig(
+      agent.language_primary || 'english',
+      agent.voice || 'female'
+    )
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const webhookUrl = `${supabaseUrl}/functions/v1/handle-call-webhook`
 
-    const putBody = {
-      agent_config: {
+    console.log('update-bolna-agent: Starting for:', agent.bolna_agent_id)
+    console.log('update-bolna-agent: Language:', agent.language_primary)
+    console.log('update-bolna-agent: Voice:', agent.voice, '→', synthesizer.provider_config.voice)
+
+    // PATCH 1 — prompt, greeting, webhook
+    const patch1 = await bolnaFetch(`/v2/agent/${agent.bolna_agent_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
         agent_name: `${agent.business_name} - Vox`,
-        agent_type: 'IVR',
         agent_welcome_message: agent.greeting,
         webhook_url: webhookUrl,
-        agent_hangup_prompt: `End the call when ALL are true: 1. You understand what caller needs 2. You have their name 3. You confirmed callback number 4. You told them team will follow up 5. Caller said goodbye or is done. Do NOT hang up if caller is still talking or asking questions.`,
-        tasks: [{
-          task_type: 'conversation',
-          toolchain: { execution: 'parallel', pipelines: [['transcriber', 'llm', 'synthesizer']] },
-          tools_config: {
-            input: { format: 'pcm', provider: 'default' },
-            output: { format: 'pcm', provider: 'default' },
-            transcriber,
-            synthesizer: {
-              provider: 'openai',
-              provider_config: { voice: voiceId, model: 'tts-1' },
-              stream: true,
-              buffer_size: 100
-            },
-            llm_agent: {
-              agent_type: 'simple_llm_agent',
-              llm_config: {
-                model: 'gpt-4o-mini',
-                provider: 'openai',
-                max_tokens: 100,
-                temperature: 0.1,
-                request_json: false,
-                max_input_tokens: 2000,
-                stream: true,
-                summarization_details: 'Summarize this customer call in 2-3 clear sentences for the business owner. Include: 1) Why the customer called 2) What they need or want 3) Any appointment or timing details 4) Any specific requests. Write as if briefing the business owner who will follow up with this customer.',
-                extraction_details: 'caller_name: Full name of the caller. Return null if not mentioned. caller_need: One sentence describing what the caller needs. preferred_time: Preferred date or time for appointment. Return null if not mentioned. urgency: high if emergency or urgent. medium if they need it soon. low for general enquiry. is_spam: true if robocall or spam. false for genuine callers. callback_number: Different callback number if mentioned. null otherwise.'
-              },
-              max_tokens: 100,
-              agent_flow_type: 'streaming',
-              provider: 'openai',
-              model: 'gpt-4o-mini',
-              temperature: 0.1,
-              request_json: false
-            }
-          },
-          task_config: {
-            hangup_after_silence: 8,
-            incremental_delay: 100,
-            number_of_words_for_interruption: 2,
-            call_cancellation_prompt: `Caller has been silent too long. Say: Thank you for calling. If you need help please call us back. Have a great day. Then hang up.`
-          }
-        }]
-      },
-      agent_prompts: {
-        task_1: { system_prompt: compiled_prompt }
-      }
-    }
-
-    console.log('UPDATE-BOLNA-AGENT: PUT body:', JSON.stringify(putBody).slice(0, 500))
-
-    const putRes = await bolnaFetch(`/v2/agent/${agent.bolna_agent_id}`, {
-      method: 'PUT',
-      body: JSON.stringify(putBody)
+        agent_prompts: {
+          task_1: { system_prompt: compiled_prompt }
+        }
+      })
     })
 
-    console.log('UPDATE-BOLNA-AGENT: PUT result:', JSON.stringify({ ok: putRes.ok, status: putRes.status, data: JSON.stringify(putRes.data).slice(0, 300) }))
+    console.log('update-bolna-agent: PATCH 1 (prompt/greeting):', JSON.stringify({
+      ok: patch1.ok,
+      status: patch1.status
+    }))
 
-    if (!putRes.ok) {
-      console.log('PUT failed, trying PATCH for supported fields only')
-      await bolnaFetch(`/v2/agent/${agent.bolna_agent_id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          agent_welcome_message: agent.greeting,
-          webhook_url: webhookUrl,
-          synthesizer: {
-            provider: 'openai',
-            provider_config: { voice: voiceId, model: 'tts-1' },
-            stream: true,
-            buffer_size: 100
-          },
-          agent_prompts: {
-            task_1: { system_prompt: compiled_prompt }
-          }
-        })
-      })
-    }
+    // PATCH 2 — synthesizer/voice
+    const patch2 = await bolnaFetch(`/v2/agent/${agent.bolna_agent_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ synthesizer })
+    })
 
+    console.log('update-bolna-agent: PATCH 2 (synthesizer/voice):', JSON.stringify({
+      ok: patch2.ok,
+      status: patch2.status
+    }))
+
+    console.log('update-bolna-agent: NOTE: Transcriber language cannot be updated via PATCH. If language was changed, user must click Resync to recreate the agent with new language.')
+
+    // Update compiled_prompt in Supabase
     await supabaseAdmin.from('agents').update({ compiled_prompt }).eq('id', agent_id)
 
     return new Response(
-      JSON.stringify({ success: putRes.ok }),
+      JSON.stringify({
+        success: patch1.ok,
+        prompt_updated: patch1.ok,
+        voice_updated: patch2.ok,
+        language_note: 'Language change requires Resync to take effect'
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (err) {
     console.error('update-bolna-agent error:', err)
     return new Response(
-      JSON.stringify({ success: false, error: 'Internal server error' }),
+      JSON.stringify({ success: false, error: String(err) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

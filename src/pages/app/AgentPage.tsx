@@ -223,6 +223,12 @@ const AgentPage = () => {
       }
 
       toast.success("✅ Saved");
+
+      // Language change needs resync toast
+      if (activeModal === "language") {
+        toast.info('🌐 Language saved. Click "Create Fresh Agent + Link Number" to apply the new language to your Vox voice.');
+      }
+
       setActiveModal(null);
     } catch { toast.error("Failed to save"); }
     finally { setSaving(false); }
@@ -359,23 +365,36 @@ const AgentPage = () => {
         ) : null}
 
         {/* Resync button — only visible with ?resync=true */}
-        {showResync && agent.bolna_agent_id && (
-          <button
-            onClick={async () => {
-              setResyncing(true);
-              const { data, error } = await supabase.functions.invoke('update-bolna-agent', { body: { agent_id: agent.id } });
-              if (!error && data?.success) {
-                toast.success('✅ Agent resynced! Language, voice and prompt updated in Bolna.');
-              } else {
-                toast.error('Resync failed: ' + (error?.message || 'Unknown error'));
-              }
-              setResyncing(false);
-            }}
-            disabled={resyncing}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-          >
-            {resyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : '🔄'} Resync Agent to Bolna
-          </button>
+        {showResync && (
+          <div className="flex flex-col gap-1">
+            <button
+              onClick={async () => {
+                setResyncing(true);
+                try {
+                  const { data, error } = await supabase.functions.invoke('create-bolna-agent', { body: { agent_id: agent.id } });
+                  if (error || !data?.success) {
+                    toast.error('Resync failed: ' + (data?.error || error?.message));
+                    return;
+                  }
+                  if (data.phone_linked) {
+                    toast.success('✅ Agent created and phone number linked! Vox is live.');
+                  } else {
+                    toast.success('✅ Agent created! Phone number linking failed — check Bolna dashboard.');
+                  }
+                  setTimeout(() => { window.location.reload(); }, 2000);
+                } catch (e) {
+                  toast.error('Resync failed: ' + String(e));
+                } finally {
+                  setResyncing(false);
+                }
+              }}
+              disabled={resyncing}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+            >
+              {resyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : '🔄'} Create Fresh Agent + Link Number
+            </button>
+            <span className="text-xs text-muted-foreground pl-1">Use this when setting up for the first time or if language was changed</span>
+          </div>
         )}
         {/* Preferences */}
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
