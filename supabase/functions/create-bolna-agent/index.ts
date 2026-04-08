@@ -142,7 +142,9 @@ Deno.serve(async (req) => {
         compiled_prompt,
         vox_number: '+16813033721',
         status: linkRes.ok ? 'active' : 'provisioning',
-        onboarding_complete: true
+        onboarding_complete: true,
+        last_rebuilt_language: agent.language_primary,
+        last_rebuilt_voice: agent.voice
       })
       .eq('id', agent_id)
 
