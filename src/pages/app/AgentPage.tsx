@@ -225,9 +225,11 @@ const AgentPage = () => {
 
       toast.success("✅ Saved");
 
-      // Language change needs resync toast
       if (activeModal === "language") {
-        toast.info('🌐 Language saved. Click "Create Fresh Agent + Link Number" to apply the new language to your Vox voice.');
+        toast.info('🌐 Language changed — click "Rebuild Agent" to apply.');
+      }
+      if (activeModal === "voice") {
+        toast.info('🎙️ Voice changed — click "Rebuild Agent" to apply.');
       }
 
       setActiveModal(null);
@@ -365,38 +367,57 @@ const AgentPage = () => {
           </div>
         ) : null}
 
-        {/* Resync button — only visible with ?resync=true */}
-        {showResync && (
-          <div className="flex flex-col gap-1">
-            <button
-              onClick={async () => {
-                setResyncing(true);
-                try {
-                  const { data, error } = await supabase.functions.invoke('create-bolna-agent', { body: { agent_id: agent.id } });
-                  if (error || !data?.success) {
-                    toast.error('Resync failed: ' + (data?.error || error?.message));
-                    return;
+        {/* Rebuild Agent button */}
+        {(() => {
+          const hasChanged = agent.language_primary !== agent.last_rebuilt_language || agent.voice !== agent.last_rebuilt_voice;
+          return (
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={async () => {
+                  if (!hasChanged) return;
+                  setRebuilding(true);
+                  try {
+                    const { data, error } = await supabase.functions.invoke('create-bolna-agent', { body: { agent_id: agent.id } });
+                    if (error || !data?.success) {
+                      toast.error('Rebuild failed: ' + (data?.error || error?.message));
+                      return;
+                    }
+                    toast.success('✅ Agent rebuilt! Language and voice changes are now live.');
+                    // Refresh agent data
+                    const { data: ag } = await supabase
+                      .from("agents")
+                      .select("id, business_name, industry, greeting, voice, talk_speed, language_primary, language_auto_detect, owner_whatsapp, phone_number, vox_number, status, compiled_prompt, onboarding_complete, bolna_agent_id, last_rebuilt_language, last_rebuilt_voice")
+                      .eq("id", agent.id)
+                      .single();
+                    if (ag) setAgent(ag);
+                  } catch (e) {
+                    toast.error('Rebuild failed: ' + String(e));
+                  } finally {
+                    setRebuilding(false);
                   }
-                  if (data.phone_linked) {
-                    toast.success('✅ Agent created and phone number linked! Vox is live.');
-                  } else {
-                    toast.success('✅ Agent created! Phone number linking failed — check Bolna dashboard.');
-                  }
-                  setTimeout(() => { window.location.reload(); }, 2000);
-                } catch (e) {
-                  toast.error('Resync failed: ' + String(e));
-                } finally {
-                  setResyncing(false);
-                }
-              }}
-              disabled={resyncing}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-            >
-              {resyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : '🔄'} Create Fresh Agent + Link Number
-            </button>
-            <span className="text-xs text-muted-foreground pl-1">Use this when setting up for the first time or if language was changed</span>
-          </div>
-        )}
+                }}
+                disabled={!hasChanged || rebuilding}
+                style={{
+                  width: '100%',
+                  height: '44px',
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  border: 'none',
+                  transition: 'all 0.2s ease',
+                  cursor: hasChanged && !rebuilding ? 'pointer' : 'not-allowed',
+                  background: hasChanged ? '#00e5a0' : '#2a2a2a',
+                  color: hasChanged ? '#000' : '#555',
+                }}
+              >
+                {rebuilding ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Rebuilding...</span> : '🔄 Rebuild Agent'}
+              </button>
+              <span className="text-xs text-muted-foreground pl-1">
+                {hasChanged ? 'Language or voice has changed — rebuild to apply' : 'No changes to apply'}
+              </span>
+            </div>
+          );
+        })()}
         {/* Preferences */}
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
           <div className="px-5 py-4 bg-blue-500/10 border-b border-border flex items-center gap-3">
