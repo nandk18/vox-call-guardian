@@ -69,6 +69,8 @@ interface AgentData {
   compiled_prompt: string | null;
   onboarding_complete: boolean | null;
   bolna_agent_id: string | null;
+  last_rebuilt_language: string | null;
+  last_rebuilt_voice: string | null;
 }
 
 interface KnowledgeData {
@@ -102,9 +104,8 @@ const AgentPage = () => {
   const [showKnowledge, setShowKnowledge] = useState(false);
   const [testMessage, setTestMessage] = useState("");
   const [testLoading, setTestLoading] = useState(false);
-  const [resyncing, setResyncing] = useState(false);
+  const [rebuilding, setRebuilding] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const showResync = searchParams.get('resync') === 'true';
 
   useEffect(() => {
     if (!user) return;
@@ -112,7 +113,7 @@ const AgentPage = () => {
       setLoading(true);
       const { data: ag } = await supabase
         .from("agents")
-        .select("id, business_name, industry, greeting, voice, talk_speed, language_primary, language_auto_detect, owner_whatsapp, phone_number, vox_number, status, compiled_prompt, onboarding_complete, bolna_agent_id")
+        .select("id, business_name, industry, greeting, voice, talk_speed, language_primary, language_auto_detect, owner_whatsapp, phone_number, vox_number, status, compiled_prompt, onboarding_complete, bolna_agent_id, last_rebuilt_language, last_rebuilt_voice")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(1)

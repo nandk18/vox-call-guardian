@@ -26,6 +26,8 @@ export type Database = {
           industry: string | null
           language_auto_detect: boolean | null
           language_primary: string | null
+          last_rebuilt_language: string | null
+          last_rebuilt_voice: string | null
           notification_email: boolean | null
           notification_sms: boolean | null
           notification_whatsapp: boolean | null
@@ -52,6 +54,8 @@ export type Database = {
           industry?: string | null
           language_auto_detect?: boolean | null
           language_primary?: string | null
+          last_rebuilt_language?: string | null
+          last_rebuilt_voice?: string | null
           notification_email?: boolean | null
           notification_sms?: boolean | null
           notification_whatsapp?: boolean | null
@@ -78,6 +82,8 @@ export type Database = {
           industry?: string | null
           language_auto_detect?: boolean | null
           language_primary?: string | null
+          last_rebuilt_language?: string | null
+          last_rebuilt_voice?: string | null
           notification_email?: boolean | null
           notification_sms?: boolean | null
           notification_whatsapp?: boolean | null
