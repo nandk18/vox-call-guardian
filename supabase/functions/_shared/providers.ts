@@ -2,40 +2,42 @@ export const getProviderConfig = (
   language: string,
   voice: string
 ) => {
-  const isMale = (voice || '')
-    .toLowerCase().includes('male')
-    && !(voice || '')
-      .toLowerCase().includes('female')
-  const voiceName = isMale
-    ? 'Vikram'
-    : 'Nila - Warm, Natural'
+  const voiceStr = (voice || '').toLowerCase()
+  const isMale = voiceStr.includes('male')
+    && !voiceStr.includes('female')
 
   const synthesizer = {
-    provider: 'elevenlabs',
-    provider_config: {
-      voice: voiceName,
-      model: 'eleven_turbo_v2_5',
-      buffer_size: 200,
-      speed_rate: 1,
-      similarity_boost: 0.75,
-      stability: 0.5,
-      style_exaggeration: 0
-    },
     stream: true,
-    buffer_size: 200
+    caching: true,
+    provider: 'elevenlabs',
+    buffer_size: 200,
+    audio_format: 'wav',
+    provider_config: {
+      model: 'eleven_turbo_v2_5',
+      speed: 1.0,
+      style: 0.0,
+      voice: isMale
+        ? 'Vikram'
+        : 'Nila - Warm, Natural Tamil Customer Care Agent',
+      voice_id: isMale
+        ? '7Q6qcYvsTRgb4IVcoAdK'
+        : 'V9LCAAi4tTlqe9JadbCo',
+      temperature: 0.5,
+      similarity_boost: 0.75
+    }
   }
 
   const sarvamLangMap: Record<string, string> = {
-    hindi: 'hi-IN',
-    tamil: 'ta-IN',
-    telugu: 'te-IN',
-    kannada: 'kn-IN',
-    malayalam: 'ml-IN',
-    marathi: 'mr-IN',
-    bengali: 'bn-IN',
-    gujarati: 'gu-IN',
-    punjabi: 'pa-IN',
-    odia: 'od-IN'
+    hindi: 'hi',
+    tamil: 'ta',
+    telugu: 'te',
+    kannada: 'kn',
+    malayalam: 'ml',
+    marathi: 'mr',
+    bengali: 'bn',
+    gujarati: 'gu',
+    punjabi: 'pa',
+    odia: 'or'
   }
 
   const indianLanguages = Object.keys(sarvamLangMap)
@@ -44,15 +46,21 @@ export const getProviderConfig = (
   const transcriber = isIndian
     ? {
         provider: 'sarvam',
-        model: 'saaras:v2.5',
+        model: 'saaras:v3',
         language: sarvamLangMap[language],
-        stream: true
+        stream: true,
+        encoding: 'linear16',
+        sampling_rate: 16000,
+        endpointing: 100,
+        task: 'transcribe'
       }
     : {
         provider: 'deepgram',
         model: 'nova-3',
         language: 'en',
         stream: true,
+        encoding: 'linear16',
+        sampling_rate: 16000,
         endpointing: 100
       }
 

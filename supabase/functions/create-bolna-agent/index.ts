@@ -11,16 +11,14 @@ Deno.serve(async (req) => {
 
   try {
     const { agent_id } = await req.json()
-    console.log('create-bolna-agent: Starting for agent_id:', agent_id)
 
-    const { data: agent, error: agentErr } = await supabaseAdmin
+    const { data: agent } = await supabaseAdmin
       .from('agents')
       .select('*, knowledge(*)')
       .eq('id', agent_id)
       .single()
 
-    if (agentErr || !agent) {
-      console.error('create-bolna-agent: Agent not found:', agentErr)
+    if (!agent) {
       return new Response(
         JSON.stringify({ success: false, error: 'Agent not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -41,11 +39,10 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const webhookUrl = `${supabaseUrl}/functions/v1/handle-call-webhook`
 
-    console.log('create-bolna-agent: Creating agent for:', agent.business_name)
-    console.log('create-bolna-agent: Language:', agent.language_primary)
-    console.log('create-bolna-agent: Voice:', agent.voice)
-    console.log('create-bolna-agent: Transcriber:', JSON.stringify(transcriber))
-    console.log('create-bolna-agent: Synthesizer provider:', synthesizer.provider, synthesizer.provider_config.voice)
+    console.log('create-bolna-agent: business:', agent.business_name)
+    console.log('create-bolna-agent: language:', agent.language_primary)
+    console.log('create-bolna-agent: voice:', agent.voice, '→', synthesizer.provider_config.voice)
+    console.log('create-bolna-agent: transcriber:', JSON.stringify(transcriber))
 
     const createBody = {
       agent_config: {
@@ -53,52 +50,51 @@ Deno.serve(async (req) => {
         agent_type: 'IVR',
         agent_welcome_message: agent.greeting || `Thank you for calling ${agent.business_name}, how can I help you today?`,
         webhook_url: webhookUrl,
-        tasks: [{
-          task_type: 'conversation',
-          toolchain: {
-            execution: 'parallel',
-            pipelines: [['transcriber', 'llm', 'synthesizer']]
-          },
-          tools_config: {
-            input: { format: 'pcm', provider: 'default' },
-            output: { format: 'pcm', provider: 'default' },
-            transcriber,
-            synthesizer,
-            llm_agent: {
-              agent_type: 'simple_llm_agent',
-              llm_config: {
-                model: 'gpt-4o-mini',
-                provider: 'openai',
-                max_tokens: 150,
-                temperature: 0.1,
-                request_json: false,
-                max_input_tokens: 2000,
-                stream: true,
-                summarization_details: 'Summarize this customer call in 2-3 sentences for the business owner. Include why they called, what they need, and any appointment or timing details.',
-                extraction_details: 'caller_name: Full name of caller. null if not given. caller_need: What the caller needs in one sentence. preferred_time: Preferred time or date. null if not mentioned. urgency: high medium or low. is_spam: true if spam or robocall. false otherwise.'
-              },
-              max_tokens: 150,
-              agent_flow_type: 'streaming',
-              provider: 'openai',
-              model: 'gpt-4o-mini',
-              temperature: 0.1,
-              request_json: false
+        tasks: [
+          {
+            task_type: 'conversation',
+            toolchain: {
+              execution: 'parallel',
+              pipelines: [['transcriber', 'llm', 'synthesizer']]
+            },
+            tools_config: {
+              input: { format: 'wav', provider: 'twilio' },
+              output: { format: 'wav', provider: 'twilio' },
+              transcriber,
+              synthesizer,
+              llm_agent: {
+                agent_type: 'simple_llm_agent',
+                llm_config: {
+                  model: 'gpt-4o-mini',
+                  provider: 'openai',
+                  max_tokens: 150,
+                  temperature: 0.1,
+                  request_json: false,
+                  agent_flow_type: 'streaming',
+                  summarization_details: 'Summarize this customer call in 2-3 sentences for the business owner. Include why they called, what they need, and any appointment or timing details.',
+                  extraction_details: 'caller_name: Full name of caller. null if not given. caller_need: What the caller needs in one sentence. preferred_time: Preferred time or date. null if not mentioned. urgency: high medium or low. is_spam: true if spam or robocall. false otherwise.'
+                },
+                agent_flow_type: 'streaming'
+              }
+            },
+            task_config: {
+              hangup_after_silence: 30,
+              incremental_delay: 200,
+              optimize_latency: true,
+              hangup_after_LLMCall: false,
+              number_of_words_for_interruption: 2,
+              check_if_user_online: true,
+              check_user_online_message: 'Hey, are you still there?'
             }
-          },
-          task_config: {
-            hangup_after_silence: 30,
-            incremental_delay: 200,
-            number_of_words_for_interruption: 3,
-            hangup_after_LLMCall: false
           }
-        }]
+        ]
       },
       agent_prompts: {
         task_1: { system_prompt: compiled_prompt }
       }
     }
 
-    console.log('create-bolna-agent: POST body:', JSON.stringify(createBody).slice(0, 500))
+    console.log('create-bolna-agent: POST body (first 500):', JSON.stringify(createBody).slice(0, 500))
 
     const createRes = await bolnaFetch('/v2/agent', {
       method: 'POST',
@@ -120,27 +116,25 @@ Deno.serve(async (req) => {
     }
 
     const bolna_agent_id = createRes.data.agent_id
-    console.log('create-bolna-agent: Agent created:', bolna_agent_id)
+    console.log('create-bolna-agent: Created:', bolna_agent_id)
 
-    // Link existing phone number to new agent
-    const BOLNA_PHONE_NUMBER_ID = '58cf9c77-e784-423f-9cb5-48bcf655fe25'
-    console.log('create-bolna-agent: Linking phone number:', BOLNA_PHONE_NUMBER_ID)
+    const PHONE_NUMBER_ID = '58cf9c77-e784-423f-9cb5-48bcf655fe25'
+    console.log('create-bolna-agent: Linking number:', PHONE_NUMBER_ID)
 
     const linkRes = await bolnaFetch('/inbound/setup', {
       method: 'POST',
       body: JSON.stringify({
         agent_id: bolna_agent_id,
-        phone_number_id: BOLNA_PHONE_NUMBER_ID
+        phone_number_id: PHONE_NUMBER_ID
       })
     })
 
-    console.log('create-bolna-agent: Phone link result:', JSON.stringify({
+    console.log('create-bolna-agent: Phone link:', JSON.stringify({
       ok: linkRes.ok,
       status: linkRes.status,
       data: JSON.stringify(linkRes.data).slice(0, 200)
     }))
 
-    // Update Supabase with new bolna_agent_id
     await supabaseAdmin
       .from('agents')
       .update({
@@ -152,7 +146,7 @@ Deno.serve(async (req) => {
       })
       .eq('id', agent_id)
 
-    console.log('create-bolna-agent: Supabase updated with new agent ID:', bolna_agent_id)
+    console.log('create-bolna-agent: Supabase updated:', bolna_agent_id)
 
     return new Response(
       JSON.stringify({
@@ -164,7 +158,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (err) {
-    console.error('create-bolna-agent error:', err, err instanceof Error ? err.stack : '')
+    console.error('create-bolna-agent error:', err)
     return new Response(
       JSON.stringify({ success: false, error: String(err) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

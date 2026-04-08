@@ -11,7 +11,6 @@ Deno.serve(async (req) => {
 
   try {
     const { agent_id } = await req.json()
-    console.log('update-bolna-agent: Starting for agent_id:', agent_id)
 
     const { data: agent } = await supabaseAdmin
       .from('agents')
@@ -27,8 +26,9 @@ Deno.serve(async (req) => {
     }
 
     if (!agent.bolna_agent_id) {
+      console.log('update-bolna-agent: No bolna_agent_id — skipping')
       return new Response(
-        JSON.stringify({ success: false, error: 'No bolna_agent_id — run resync first' }),
+        JSON.stringify({ success: false, error: 'No bolna_agent_id. Run resync first.' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -47,11 +47,10 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const webhookUrl = `${supabaseUrl}/functions/v1/handle-call-webhook`
 
-    console.log('update-bolna-agent: Starting for:', agent.bolna_agent_id)
-    console.log('update-bolna-agent: Language:', agent.language_primary)
-    console.log('update-bolna-agent: Voice:', agent.voice, '→', synthesizer.provider_config.voice)
+    console.log('update-bolna-agent: agent:', agent.bolna_agent_id)
+    console.log('update-bolna-agent: voice:', agent.voice, '→', synthesizer.provider_config.voice)
 
-    // PATCH 1 — prompt, greeting, webhook
+    // PATCH 1 — prompt + greeting + webhook
     const patch1 = await bolnaFetch(`/v2/agent/${agent.bolna_agent_id}`, {
       method: 'PATCH',
       body: JSON.stringify({
@@ -64,7 +63,7 @@ Deno.serve(async (req) => {
       })
     })
 
-    console.log('update-bolna-agent: PATCH 1 (prompt/greeting):', JSON.stringify({
+    console.log('update-bolna-agent: PATCH 1 result:', JSON.stringify({
       ok: patch1.ok,
       status: patch1.status
     }))
@@ -75,12 +74,12 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ synthesizer })
     })
 
-    console.log('update-bolna-agent: PATCH 2 (synthesizer/voice):', JSON.stringify({
+    console.log('update-bolna-agent: PATCH 2 result:', JSON.stringify({
       ok: patch2.ok,
       status: patch2.status
     }))
 
-    console.log('update-bolna-agent: NOTE: Transcriber language cannot be updated via PATCH. If language was changed, user must click Resync to recreate the agent with new language.')
+    console.log('update-bolna-agent: NOTE: Language changes require Resync to take effect in Bolna.')
 
     // Update compiled_prompt in Supabase
     await supabaseAdmin.from('agents').update({ compiled_prompt }).eq('id', agent_id)
