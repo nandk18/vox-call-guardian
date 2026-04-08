@@ -98,6 +98,7 @@ export type Database = {
       calls: {
         Row: {
           agent_id: string
+          bolna_call_id: string | null
           caller_name: string | null
           caller_need: string | null
           caller_number: string | null
@@ -115,6 +116,7 @@ export type Database = {
         }
         Insert: {
           agent_id: string
+          bolna_call_id?: string | null
           caller_name?: string | null
           caller_need?: string | null
           caller_number?: string | null
@@ -132,6 +134,7 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          bolna_call_id?: string | null
           caller_name?: string | null
           caller_need?: string | null
           caller_number?: string | null
