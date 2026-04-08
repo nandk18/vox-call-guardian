@@ -83,7 +83,7 @@ const SettingsPage = () => {
   const updateAgent = async (field: string, value: string) => {
     if (!agent) return;
     setSaving(true);
-    const { error } = await supabase.from("agents").update({ [field]: value }).eq("id", agent.id);
+    const { error } = await supabase.from("agents").update({ [field]: value } as any).eq("id", agent.id);
     setSaving(false);
     if (error) toast.error("Failed to save");
     else { toast.success("✅ Saved"); refetch(); queryClient.invalidateQueries({ queryKey: ["agent"] }); }
