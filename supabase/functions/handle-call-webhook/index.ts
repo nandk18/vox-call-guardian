@@ -1,39 +1,103 @@
 import { supabaseAdmin } from '../_shared/supabaseAdmin.ts'
 
-function formatPhone(num: string): string {
-  if (!num) return 'Unknown'
-  const clean = num.replace(/\D/g, '')
-  if (clean.startsWith('1') && clean.length === 11) {
-    return `+1 ${clean.slice(1,4)} ${clean.slice(4,7)} ${clean.slice(7)}`
-  }
-  if (clean.startsWith('91') && clean.length === 12) {
-    const n = clean.slice(2)
-    return `+91 ${n.slice(0,5)} ${n.slice(5)}`
-  }
-  if (clean.length === 10) {
-    return `+91 ${clean.slice(0,5)} ${clean.slice(5)}`
-  }
-  return num
-}
-
 function formatTimestamp(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-function generateSummary(transcript: any[], callerNumber: string): string {
-  if (!transcript?.length) {
-    return `Call from ${callerNumber}. No conversation recorded.`
+async function analyzeTranscript(
+  transcript: any[],
+  businessName: string,
+  callerNumber: string
+): Promise<{
+  summary: string
+  callerName: string | null
+  callerNeed: string | null
+  urgency: string
+  preferredTime: string | null
+}> {
+  if (!transcript || transcript.length < 2) {
+    return {
+      summary: `Call from ${callerNumber}. No conversation recorded.`,
+      callerName: null,
+      callerNeed: null,
+      urgency: 'low',
+      preferredTime: null
+    }
   }
-  const callerLines = transcript
-    .filter(t => t.speaker === 'caller')
-    .map(t => t.text)
-    .filter(t => t?.length > 0)
-  if (!callerLines.length) {
-    return `Call from ${callerNumber}. Caller did not speak.`
+
+  const transcriptText = transcript
+    .map(t => `${t.speaker === 'vox' ? 'Agent' : 'Caller'}: ${t.text}`)
+    .join('\n')
+
+  try {
+    const response = await fetch(
+      'https://api.anthropic.com/v1/messages',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') ?? '',
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 500,
+          messages: [
+            {
+              role: 'user',
+              content: `You are analyzing a call transcript for a business called "${businessName}".
+
+Extract the following from this transcript and respond ONLY with a JSON object, no other text:
+
+{
+  "summary": "2-3 sentence summary of the call for the business owner. Include what the caller needed and any important details.",
+  "caller_name": "full name if mentioned, null if not",
+  "caller_need": "one sentence describing what they need, null if unclear",
+  "urgency": "high if urgent/emergency, medium if soon, low if general",
+  "preferred_time": "preferred appointment or callback time if mentioned, null if not"
+}
+
+Transcript:
+${transcriptText}`
+            }
+          ]
+        })
+      }
+    )
+
+    const data = await response.json()
+    const text = data?.content?.[0]?.text || ''
+    console.log('analyzeTranscript: Claude response:', text.slice(0, 200))
+
+    const clean = text.replace(/```json/g, '').replace(/```/g, '').trim()
+    const parsed = JSON.parse(clean)
+
+    return {
+      summary: parsed.summary || `Call from ${callerNumber}.`,
+      callerName: parsed.caller_name || null,
+      callerNeed: parsed.caller_need || null,
+      urgency: parsed.urgency || 'low',
+      preferredTime: parsed.preferred_time || null
+    }
+  } catch (e) {
+    console.error('analyzeTranscript error:', e)
+    const callerLines = transcript
+      .filter(t => t.speaker === 'caller')
+      .map(t => t.text)
+      .filter(t => t?.length > 0)
+
+    return {
+      summary: callerLines.length > 0
+        ? `Call from ${callerNumber}. Customer said: "${callerLines.slice(0, 2).join('. ')}"`
+        : `Call from ${callerNumber}.`,
+      callerName: null,
+      callerNeed: null,
+      urgency: 'low',
+      preferredTime: null
+    }
   }
-  return `Call from ${callerNumber}. Customer: "${callerLines.slice(0, 3).join('. ')}"`
 }
 
 async function processWebhook(payload: any) {
@@ -46,14 +110,48 @@ async function processWebhook(payload: any) {
 
   const bolnaAgentId = payload?.agent_id
   if (!bolnaAgentId) {
-    console.error('No agent_id in payload')
+    console.error('processWebhook: No agent_id')
     return
   }
 
-  const duration = Math.floor(payload?.conversation_duration || payload?.duration || 0)
-  const recordingUrl = payload?.recording_url || null
+  // Deduplicate by call_id
+  const bolnaCallId = payload?.id || payload?.call_id
+  if (bolnaCallId) {
+    const { data: existing } = await supabaseAdmin
+      .from('calls')
+      .select('id')
+      .eq('bolna_call_id', bolnaCallId)
+      .maybeSingle()
 
-  // Parse transcript — Bolna sends plain string "assistant: Hello\nuser: Hi..."
+    if (existing) {
+      console.log('processWebhook: Duplicate, skipping:', bolnaCallId)
+      return
+    }
+  }
+
+  // Get fields from correct locations
+  const callerNumber =
+    payload?.telephony_data?.from_number ||
+    payload?.from_number ||
+    payload?.customer_number ||
+    'Unknown'
+
+  const recordingUrl =
+    payload?.telephony_data?.recording_url ||
+    payload?.recording_url ||
+    null
+
+  const duration = Math.floor(
+    payload?.conversation_duration ||
+    payload?.duration ||
+    0
+  )
+
+  console.log('processWebhook: Fields:', {
+    bolnaCallId, callerNumber, duration, hasRecording: !!recordingUrl
+  })
+
+  // Parse transcript from plain string
   const transcriptRaw = payload?.transcript || ''
   let formattedTranscript: any[] = []
 
@@ -68,34 +166,11 @@ async function processWebhook(payload: any) {
         timestamp: formatTimestamp(i * 5)
       }
     })
-  } else if (Array.isArray(transcriptRaw)) {
-    formattedTranscript = transcriptRaw.map((t: any, i: number) => ({
-      speaker: t.role === 'assistant' || t.role === 'agent' ? 'vox' : 'caller',
-      text: t.content || t.text || '',
-      timestamp: t.timestamp || formatTimestamp(i * 5)
-    }))
   }
 
-  console.log('processWebhook: Transcript:', formattedTranscript.length, 'lines')
+  console.log('processWebhook: Transcript lines:', formattedTranscript.length)
 
-  // Extraction data
-  const extracted = payload?.extracted_data || payload?.extractions || {}
-  const callerName = extracted?.caller_name || null
-  const callerNeed = extracted?.caller_need || null
-  const urgency = extracted?.urgency || 'low'
-  const preferredTime = extracted?.preferred_time || null
-  const isSpam = extracted?.is_spam === true
-
-  // Summary
-  const callerNumber = payload?.customer_number || payload?.from_number || payload?.caller_number || 'Unknown'
-  const summary = payload?.summary || generateSummary(formattedTranscript, callerNumber)
-
-  // Outcome
-  const outcome = isSpam ? 'spam' :
-    duration > 5 ? 'answered' :
-    formattedTranscript.length > 1 ? 'answered' : 'missed'
-
-  // Find agent
+  // Find agent by bolna_agent_id
   const { data: agent, error: agentErr } = await supabaseAdmin
     .from('agents')
     .select('id, user_id, business_name, owner_whatsapp, owner_mobile, notification_whatsapp, notification_sms, notification_email')
@@ -109,20 +184,42 @@ async function processWebhook(payload: any) {
 
   console.log('processWebhook: Agent:', agent.id, agent.business_name)
 
-  // Insert call
+  // Determine outcome
+  const isSpam = payload?.extracted_data?.is_spam === true
+  const outcome = isSpam ? 'spam' :
+    duration > 5 ? 'answered' :
+    formattedTranscript.length > 1 ? 'answered' : 'missed'
+
+  // Analyze transcript with Claude
+  console.log('processWebhook: Analyzing transcript with Claude...')
+  const analysis = await analyzeTranscript(
+    formattedTranscript,
+    agent.business_name || 'the business',
+    callerNumber
+  )
+
+  console.log('processWebhook: Analysis:', JSON.stringify({
+    summary: analysis.summary.slice(0, 100),
+    callerName: analysis.callerName,
+    callerNeed: analysis.callerNeed,
+    urgency: analysis.urgency
+  }))
+
+  // Insert call record
   const { data: call, error: insertErr } = await supabaseAdmin
     .from('calls')
     .insert({
       agent_id: agent.id,
+      bolna_call_id: bolnaCallId,
       caller_number: callerNumber,
       duration_secs: duration,
       outcome,
       transcript: formattedTranscript,
-      summary,
-      caller_name: callerName,
-      caller_need: callerNeed,
-      caller_urgency: urgency,
-      preferred_callback_time: preferredTime,
+      summary: analysis.summary,
+      caller_name: analysis.callerName,
+      caller_need: analysis.callerNeed,
+      caller_urgency: analysis.urgency,
+      preferred_callback_time: analysis.preferredTime,
       recording_url: recordingUrl,
       is_read: false,
       notification_sent: false,
@@ -192,7 +289,7 @@ Deno.serve(async (req) => {
     status: payload?.status,
     agent_id: payload?.agent_id,
     call_id: payload?.id,
-    from: payload?.customer_number || payload?.from_number,
+    from: payload?.telephony_data?.from_number || payload?.from_number,
     duration: payload?.conversation_duration || payload?.duration
   }))
 
