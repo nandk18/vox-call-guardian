@@ -196,7 +196,7 @@ const AgentPage = () => {
       }
 
       if (Object.keys(agentFields).length > 0) {
-        await supabase.from("agents").update(agentFields).eq("id", agent.id);
+        await supabase.from("agents").update(agentFields as any).eq("id", agent.id);
         setAgent((prev) => prev ? { ...prev, ...agentFields } as AgentData : prev);
       }
 
