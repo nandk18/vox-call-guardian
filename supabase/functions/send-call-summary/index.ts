@@ -79,46 +79,10 @@ ${Deno.env.get('VOX_APP_URL') || 'https://vox-call-guardian.lovable.app'}/app/in
       return true
     }
 
-    // WhatsApp via MSG91
-    if (shouldSendChannel('whatsapp') && (agent.notification_whatsapp || test_mode) && agent.owner_whatsapp) {
-      const msg91Key = Deno.env.get('MSG91_AUTH_KEY')
-      if (msg91Key) {
-        try {
-          const waRes = await fetch(
-            'https://api.msg91.com/api/v5/whatsapp/whatsapp-message-send',
-            {
-              method: 'POST',
-              headers: {
-                'authkey': msg91Key,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                integrated_number: Deno.env.get('MSG91_WHATSAPP_NUMBER'),
-                content_type: 'template',
-                payload: {
-                  to: cleanPhone(agent.owner_whatsapp),
-                  type: 'text',
-                  messaging_product: 'whatsapp',
-                  recipient_type: 'individual',
-                  text: { body: summaryMessage }
-                }
-              })
-            }
-          )
-          const waData = await waRes.json().catch(() => waRes.statusText)
-          whatsappSent = waRes.ok
-          debugResponses.whatsapp = { status: waRes.status, ok: waRes.ok, body: waData }
-          console.log('MSG91 WhatsApp:', JSON.stringify(waData))
-          if (!waRes.ok) console.error('MSG91 WhatsApp failed:', waData)
-        } catch (e) {
-          console.error('WhatsApp error:', e)
-          debugResponses.whatsapp = { error: String(e) }
-        }
-      } else {
-        console.log('MSG91 not configured, skipping WhatsApp')
-        debugResponses.whatsapp = { error: 'MSG91_AUTH_KEY not configured' }
-      }
-    }
+    // WhatsApp via MSG91 requires pre-approved templates.
+    // Skipping until templates are approved.
+    console.log('WhatsApp skipped: pre-approved templates required.')
+    whatsappSent = false
 
     // SMS via MSG91
     if (shouldSendChannel('sms') && (agent.notification_sms || test_mode) && agent.owner_mobile) {
@@ -181,7 +145,7 @@ ${Deno.env.get('VOX_APP_URL') || 'https://vox-call-guardian.lovable.app'}/app/in
               method: 'POST',
               headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                from: 'Vox <notifications@voxai.in>',
+                from: 'Vox Calls <onboarding@resend.dev>',
                 to: userEmail,
                 subject: `📞 ${test_mode ? '[TEST] ' : ''}New call from ${formatPhone(call.caller_number)} — ${agent.business_name}`,
                 html: emailHtml
