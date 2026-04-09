@@ -394,21 +394,8 @@ const SettingsPage = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={activeModal === "notifications"} onOpenChange={async (o) => {
-        if (o && !notifLoaded && user) {
-          const { data: ag } = await supabase
-            .from("agents")
-            .select("notification_email, notification_whatsapp, notification_sms")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          setEmailNotif(ag?.notification_email ?? true);
-          setWhatsappNotif(ag?.notification_whatsapp ?? true);
-          setSmsNotif(ag?.notification_sms ?? false);
-          setNotifLoaded(true);
-        }
-        if (!o) { setActiveModal(null); setNotifLoaded(false); }
+      <Dialog open={activeModal === "notifications"} onOpenChange={(o) => {
+        if (!o) setActiveModal(null);
         else setActiveModal("notifications");
       }}>
         <DialogContent className="bg-card border-border">
