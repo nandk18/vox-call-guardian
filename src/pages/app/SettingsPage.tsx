@@ -59,18 +59,22 @@ const SettingsPage = () => {
   const [whatsappNotif, setWhatsappNotif] = useState(true);
   const [smsNotif, setSmsNotif] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
-  const [notifLoaded, setNotifLoaded] = useState(false);
 
   const { data: agent, refetch } = useQuery({
     queryKey: ["settings-agent", user?.id],
     queryFn: async () => {
       const { data } = await supabase
         .from("agents")
-        .select("id, phone_number, vox_number, owner_mobile, owner_whatsapp, trial_ends_at, status, business_name, bolna_agent_id")
+        .select("id, phone_number, vox_number, owner_mobile, owner_whatsapp, trial_ends_at, status, business_name, bolna_agent_id, notification_email, notification_whatsapp, notification_sms")
         .eq("user_id", user!.id)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (data) {
+        setEmailNotif(data.notification_email ?? true);
+        setWhatsappNotif(data.notification_whatsapp ?? true);
+        setSmsNotif(data.notification_sms ?? false);
+      }
       return data as Agent | null;
     },
     enabled: !!user,
@@ -390,21 +394,8 @@ const SettingsPage = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={activeModal === "notifications"} onOpenChange={async (o) => {
-        if (o && !notifLoaded && user) {
-          const { data: ag } = await supabase
-            .from("agents")
-            .select("notification_email, notification_whatsapp, notification_sms")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          setEmailNotif(ag?.notification_email ?? true);
-          setWhatsappNotif(ag?.notification_whatsapp ?? true);
-          setSmsNotif(ag?.notification_sms ?? false);
-          setNotifLoaded(true);
-        }
-        if (!o) { setActiveModal(null); setNotifLoaded(false); }
+      <Dialog open={activeModal === "notifications"} onOpenChange={(o) => {
+        if (!o) setActiveModal(null);
         else setActiveModal("notifications");
       }}>
         <DialogContent className="bg-card border-border">
