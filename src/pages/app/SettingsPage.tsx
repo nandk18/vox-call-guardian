@@ -58,6 +58,8 @@ const SettingsPage = () => {
   const [emailNotif, setEmailNotif] = useState(true);
   const [whatsappNotif, setWhatsappNotif] = useState(true);
   const [smsNotif, setSmsNotif] = useState(false);
+  const [savingField, setSavingField] = useState<string | null>(null);
+  const [notifLoaded, setNotifLoaded] = useState(false);
 
   const { data: agent, refetch } = useQuery({
     queryKey: ["settings-agent", user?.id],
@@ -388,18 +390,51 @@ const SettingsPage = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={activeModal === "notifications"} onOpenChange={(o) => !o && setActiveModal(null)}>
+      <Dialog open={activeModal === "notifications"} onOpenChange={async (o) => {
+        if (o && !notifLoaded && user) {
+          const { data: ag } = await supabase
+            .from("agents")
+            .select("notification_email, notification_whatsapp, notification_sms")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          setEmailNotif(ag?.notification_email ?? true);
+          setWhatsappNotif(ag?.notification_whatsapp ?? true);
+          setSmsNotif(ag?.notification_sms ?? false);
+          setNotifLoaded(true);
+        }
+        if (!o) { setActiveModal(null); setNotifLoaded(false); }
+        else setActiveModal("notifications");
+      }}>
         <DialogContent className="bg-card border-border">
           <DialogHeader><DialogTitle>Notification Preferences</DialogTitle><DialogDescription>Choose how you receive call summaries</DialogDescription></DialogHeader>
           <div className="space-y-5 py-2">
             {[
-              { icon: "📧", label: "Email summary", checked: emailNotif, onChange: setEmailNotif },
-              { icon: "💬", label: "WhatsApp summary", checked: whatsappNotif, onChange: setWhatsappNotif },
-              { icon: "📱", label: "SMS summary", checked: smsNotif, onChange: setSmsNotif },
+              { icon: "📧", label: "Email summary", field: "notification_email", checked: emailNotif },
+              { icon: "💬", label: "WhatsApp summary", field: "notification_whatsapp", checked: whatsappNotif },
+              { icon: "📱", label: "SMS summary", field: "notification_sms", checked: smsNotif },
             ].map((n) => (
               <div key={n.label} className="flex items-center justify-between min-h-[44px]">
-                <Label className="flex items-center gap-3 text-sm cursor-pointer"><span className="text-lg">{n.icon}</span>{n.label}</Label>
-                <Switch checked={n.checked} onCheckedChange={n.onChange} />
+                <Label className="flex items-center gap-3 text-sm cursor-pointer">
+                  <span className="text-lg">{n.icon}</span>{n.label}
+                  {savingField === n.field && <span className="text-[11px] text-muted-foreground ml-2">Saving...</span>}
+                </Label>
+                <Switch checked={n.checked} onCheckedChange={async (val) => {
+                  if (n.field === "notification_email") setEmailNotif(val);
+                  else if (n.field === "notification_whatsapp") setWhatsappNotif(val);
+                  else if (n.field === "notification_sms") setSmsNotif(val);
+                  setSavingField(n.field);
+                  const { error } = await supabase.from("agents").update({ [n.field]: val } as any).eq("user_id", user!.id);
+                  if (error) {
+                    console.error("Failed to save preference:", error);
+                    toast.error("Failed to save preference");
+                    if (n.field === "notification_email") setEmailNotif(!val);
+                    else if (n.field === "notification_whatsapp") setWhatsappNotif(!val);
+                    else if (n.field === "notification_sms") setSmsNotif(!val);
+                  }
+                  setTimeout(() => setSavingField(null), 1000);
+                }} />
               </div>
             ))}
           </div>
