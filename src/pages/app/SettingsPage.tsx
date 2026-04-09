@@ -59,7 +59,6 @@ const SettingsPage = () => {
   const [whatsappNotif, setWhatsappNotif] = useState(true);
   const [smsNotif, setSmsNotif] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
-  const [notifLoaded, setNotifLoaded] = useState(false);
 
   const { data: agent, refetch } = useQuery({
     queryKey: ["settings-agent", user?.id],
