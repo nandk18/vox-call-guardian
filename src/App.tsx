@@ -13,6 +13,7 @@ import AppLayout from "./components/app/AppLayout";
 import InboxPage from "./pages/app/InboxPage";
 import AgentPage from "./pages/app/AgentPage";
 import SettingsPage from "./pages/app/SettingsPage";
+import IntegrationsPage from "./pages/app/IntegrationsPage";
 import OnboardingPage from "./pages/app/OnboardingPage";
 import NotFound from "./pages/NotFound";
 
@@ -48,6 +49,7 @@ const App = () => (
               >
                 <Route path="inbox" element={<InboxPage />} />
                 <Route path="agent" element={<AgentPage />} />
+                <Route path="integrations" element={<IntegrationsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />

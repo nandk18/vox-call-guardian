@@ -1,6 +1,7 @@
 export const compileAgentPrompt = (
   agent: any,
-  knowledge: any
+  knowledge: any,
+  hasCalcom: boolean = false
 ): string => {
   const businessName = agent.business_name || 'this business'
   const industry = agent.industry || 'business'

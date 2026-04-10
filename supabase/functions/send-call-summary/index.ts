@@ -145,7 +145,7 @@ ${Deno.env.get('VOX_APP_URL') || 'https://vox-call-guardian.lovable.app'}/app/in
               method: 'POST',
               headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                from: 'Vox Calls <onboarding@resend.dev>',
+                from: 'Vox <noreply@tushietrials.ca>',
                 to: userEmail,
                 subject: `📞 ${test_mode ? '[TEST] ' : ''}New call from ${formatPhone(call.caller_number)} — ${agent.business_name}`,
                 html: emailHtml
