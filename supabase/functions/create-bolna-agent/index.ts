@@ -126,12 +126,11 @@ Deno.serve(async (req) => {
         ],
         tools_params: {
           check_availability_of_slots: {
-            url: "https://api.cal.com/v2/slots/available",
+            url: "https://api.cal.com/v2/slots",
             param: {
               eventTypeId: calIntegration.event_type_id,
               startTime: "%(startTime)s",
               endTime: "%(endTime)s",
-              timeZone: "Asia/Kolkata",
             },
             method: "GET",
             headers: {
@@ -226,7 +225,49 @@ Deno.serve(async (req) => {
     const bolna_agent_id = createRes.data.agent_id;
     console.log("create-bolna-agent: Created:", bolna_agent_id);
 
-    const PHONE_NUMBER_ID = "58cf9c77-e784-423f-9cb5-48bcf655fe25";
+    const voxNumber = agent.vox_number || "+16813033721";
+    const phoneNumberId = agent.bolna_phone_number_id || "58cf9c77-e784-423f-9cb5-48bcf655fe25";
+    console.log("create-bolna-agent: vox_number:", voxNumber);
+    console.log("create-bolna-agent: phone_number_id:", phoneNumberId);
+
+    if (!phoneNumberId) {
+      console.log("create-bolna-agent: No phone number ID found — skipping phone linking. Run provision-vox-number first.");
+      await supabaseAdmin
+        .from("agents")
+        .update({
+          bolna_agent_id,
+          compiled_prompt,
+          status: "provisioning",
+          onboarding_complete: true,
+          last_rebuilt_language: agent.language_primary,
+          last_rebuilt_voice: agent.voice,
+        })
+        .eq("id", agent_id);
+
+      // Mark Cal.com integration as active after successful agent creation
+      if (hasCalcom) {
+        await supabaseAdmin
+          .from("integrations")
+          .update({ is_active: true })
+          .eq("agent_id", agent_id)
+          .eq("type", "calcom");
+      }
+
+      console.log("create-bolna-agent: Supabase updated (no phone link):", bolna_agent_id);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          bolna_agent_id,
+          vox_number: null,
+          phone_linked: false,
+          note: "Agent created but no phone number assigned yet. Run provision-vox-number.",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const PHONE_NUMBER_ID = phoneNumberId;
     console.log("create-bolna-agent: Linking number:", PHONE_NUMBER_ID);
 
     const linkRes = await bolnaFetch("/inbound/setup", {
@@ -251,7 +292,7 @@ Deno.serve(async (req) => {
       .update({
         bolna_agent_id,
         compiled_prompt,
-        vox_number: "+16813033721",
+        vox_number: voxNumber,
         status: linkRes.ok ? "active" : "provisioning",
         onboarding_complete: true,
         last_rebuilt_language: agent.language_primary,
@@ -274,7 +315,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         bolna_agent_id,
-        vox_number: "+16813033721",
+        vox_number: voxNumber,
         phone_linked: linkRes.ok,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
