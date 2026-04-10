@@ -166,6 +166,53 @@ export type Database = {
           },
         ]
       }
+      integrations: {
+        Row: {
+          agent_id: string | null
+          api_key: string | null
+          created_at: string | null
+          event_type_id: string | null
+          event_type_name: string | null
+          id: string
+          is_active: boolean | null
+          timezone: string | null
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          api_key?: string | null
+          created_at?: string | null
+          event_type_id?: string | null
+          event_type_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          timezone?: string | null
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          api_key?: string | null
+          created_at?: string | null
+          event_type_id?: string | null
+          event_type_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          timezone?: string | null
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integrations_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge: {
         Row: {
           address: string | null

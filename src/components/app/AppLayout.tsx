@@ -8,7 +8,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Inbox, Bot, Settings, Bell } from "lucide-react";
+import { Inbox, Bot, Settings, Bell, LayoutGrid } from "lucide-react";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import TrialExpiredModal from "@/components/app/TrialExpiredModal";
 import OfflineBanner from "@/components/app/OfflineBanner";
@@ -18,6 +18,7 @@ import PWAInstallPrompt from "@/components/app/PWAInstallPrompt";
 const pageTitles: Record<string, string> = {
   "/app/inbox": "Inbox",
   "/app/agent": "Agent",
+  "/app/integrations": "Integrations",
   "/app/settings": "Settings",
   "/app/onboarding": "Onboarding",
 };
@@ -119,6 +120,7 @@ const AppLayout = () => {
   const navItems = [
     { to: "/app/inbox", icon: Inbox, label: "Inbox", badge: unreadCount },
     { to: "/app/agent", icon: Bot, label: "Agent" },
+    { to: "/app/integrations", icon: LayoutGrid, label: "Integrations" },
     { to: "/app/settings", icon: Settings, label: "Settings" },
   ];
 

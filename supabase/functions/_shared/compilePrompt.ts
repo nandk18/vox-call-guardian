@@ -1,6 +1,7 @@
 export const compileAgentPrompt = (
   agent: any,
-  knowledge: any
+  knowledge: any,
+  hasCalcom: boolean = false
 ): string => {
   const businessName = agent.business_name || 'this business'
   const industry = agent.industry || 'business'
@@ -125,5 +126,32 @@ Do NOT hang up if:
 - Caller is still asking questions
 - You have not confirmed their name
 - Caller seems confused or mid sentence
+${hasCalcom ? `
+# Appointment Booking
+
+You can check availability and book appointments live during this call.
+
+When a caller wants to book:
+1. Ask for their preferred day and time
+2. Call check_availability_of_slots to fetch available slots
+3. Offer maximum 3 available slots:
+   "I have 10am, 2pm, and 4pm available tomorrow. Which works for you?"
+4. Once caller confirms a slot:
+   Ask for their name if not already collected
+5. Call book_appointment with:
+   - name: caller's name
+   - preferred_date: YYYY-MM-DD format
+   - preferred_time: HH:MM format
+6. Confirm booking:
+   "Perfect! You are booked for [date] at [time]. The team will see you then!"
+
+Rules:
+- Always check availability BEFORE offering slots
+- Never promise a slot without checking
+- Only book after caller confirms
+- If no slots available say:
+  "I don't see availability for that time. Would you like to try a different day?"
+- Never call book_appointment twice for the same call
+` : ''}
   `.trim()
 }
