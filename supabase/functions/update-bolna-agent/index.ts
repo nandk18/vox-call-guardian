@@ -33,11 +33,21 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Check Cal.com integration
+    const { data: calIntegration } = await supabaseAdmin
+      .from('integrations')
+      .select('*')
+      .eq('agent_id', agent_id)
+      .eq('type', 'calcom')
+      .maybeSingle()
+
+    const hasCalcom = !!calIntegration?.api_key
+
     const knowledge = Array.isArray(agent.knowledge)
       ? agent.knowledge[0] || {}
       : agent.knowledge || {}
 
-    const compiled_prompt = compileAgentPrompt(agent, knowledge)
+    const compiled_prompt = compileAgentPrompt(agent, knowledge, hasCalcom)
 
     const { synthesizer } = getProviderConfig(
       agent.language_primary || 'english',
@@ -49,6 +59,7 @@ Deno.serve(async (req) => {
 
     console.log('update-bolna-agent: agent:', agent.bolna_agent_id)
     console.log('update-bolna-agent: voice:', agent.voice, '→', synthesizer.provider_config.voice)
+    console.log('update-bolna-agent: Cal.com:', hasCalcom ? calIntegration.event_type_name : 'none')
 
     // PATCH 1 — prompt + greeting + webhook
     const patch1 = await bolnaFetch(`/v2/agent/${agent.bolna_agent_id}`, {
