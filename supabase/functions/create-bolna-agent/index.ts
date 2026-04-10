@@ -82,81 +82,88 @@ Deno.serve(async (req) => {
             key: "check_availability_of_slots",
             name: "check_availability_of_slots",
             description:
-              "Fetch available appointment slots from the calendar. Call this BEFORE booking to show the caller available times. Pass start and end as UTC date strings. For today use start=TODAY_DATE+T03:30:00Z and end=TODAY_DATE+T13:30:00Z which is 9am to 7pm IST. For tomorrow add 1 day to both dates.",
+              "Fetch the available free slots of appointment booking before booking the appointment.",
             parameters: {
               type: "object",
-              required: ["start", "end"],
+              required: ["startTime", "endTime"],
               properties: {
-                start: {
+                startTime: {
                   type: "string",
                   description:
-                    "Start of time range in UTC ISO 8601 format. IST is UTC+5:30 so 9am IST = 03:30:00Z. Example for today: 2026-04-10T03:30:00Z Example for tomorrow: 2026-04-11T03:30:00Z Always use Z suffix for UTC.",
+                    "Start of time range in ISO format YYYY-MM-DDTHH:MM:SS. Use today or tomorrow based on caller preference. For 9am IST today use: TODAY_DATE+T09:00:00 For 9am IST tomorrow use: TOMORROW_DATE+T09:00:00 Example: 2026-04-10T09:00:00",
                 },
-                end: {
+                endTime: {
                   type: "string",
                   description:
-                    "End of time range in UTC ISO 8601 format. 7pm IST = 13:30:00Z. Example for today: 2026-04-10T13:30:00Z Example for tomorrow: 2026-04-11T13:30:00Z Always use Z suffix for UTC.",
+                    "End of time range in ISO format YYYY-MM-DDTHH:MM:SS. Always 8 hours after startTime. For 5pm IST today use: TODAY_DATE+T17:00:00 Example: 2026-04-10T17:00:00",
                 },
               },
             },
-            pre_call_message: "Just a moment, let me check availability for you.",
+            pre_call_message: "Just give me a moment, I will be back with you.",
           },
           {
             key: "book_appointment",
             name: "book_appointment",
             description:
-              "Book an appointment after the caller confirms a specific time slot. Only call AFTER caller has confirmed. Use the exact slot time returned by check_availability_of_slots. Convert IST time to UTC by subtracting 5 hours 30 minutes. Example: 10am IST = 04:30:00Z",
+              "Book an appointment after caller confirms a slot. Only call after caller has confirmed the time.",
             parameters: {
               type: "object",
-              required: ["name", "start"],
+              required: ["name", "preferred_date", "preferred_time"],
               properties: {
                 name: {
                   type: "string",
                   description: "Full name of the caller.",
                 },
-                start: {
+                preferred_date: {
                   type: "string",
                   description:
-                    "Exact start time of the chosen slot in UTC ISO 8601 format with Z suffix. Use the exact value returned by check_availability_of_slots. Example: 2026-04-10T04:30:00Z",
+                    "Date of appointment in YYYY-MM-DD format. Example: 2026-04-10",
+                },
+                preferred_time: {
+                  type: "string",
+                  description:
+                    "Time of appointment in HH:MM 24 hour format. Example: 10:00 for 10am, 14:30 for 2:30pm",
                 },
               },
             },
-            pre_call_message: "Perfect, let me book that for you right now.",
+            pre_call_message: "Perfect, let me book that for you now.",
           },
         ],
         tools_params: {
           check_availability_of_slots: {
-            url: "https://api.cal.com/v2/slots",
+            url: "https://api.cal.com/v1/slots",
             param: {
+              apiKey: calIntegration.api_key,
               eventTypeId: calIntegration.event_type_id,
-              start: "%(start)s",
-              end: "%(end)s",
+              startTime: "%(startTime)s",
+              endTime: "%(endTime)s",
               timeZone: "Asia/Kolkata",
             },
             method: "GET",
             headers: {
-              Authorization: `Bearer ${calIntegration.api_key}`,
-              "cal-api-version": "2024-09-04",
+              "Content-Type": "application/json",
             },
             api_token: null,
           },
           book_appointment: {
-            url: "https://api.cal.com/v2/bookings",
+            url: `https://api.cal.com/v1/bookings?apiKey=${calIntegration.api_key}`,
             param: {
               eventTypeId: parseInt(calIntegration.event_type_id),
-              start: "%(start)s",
-              attendee: {
+              start: "%(preferred_date)sT%(preferred_time)s:00.000+05:30",
+              language: "en",
+              metadata: {},
+              timeZone: "Asia/Kolkata",
+              responses: {
                 name: "%(name)s",
                 email: "booking@tushietrials.ca",
-                timeZone: "Asia/Kolkata",
-                language: "en",
+                location: {
+                  value: "inPerson",
+                  optionValue: "",
+                },
               },
-              metadata: {},
             },
             method: "POST",
             headers: {
-              Authorization: `Bearer ${calIntegration.api_key}`,
-              "cal-api-version": "2024-08-13",
               "Content-Type": "application/json",
             },
             api_token: null,

@@ -132,42 +132,33 @@ ${hasCalcom ? `
 You can check availability and book appointments live during this call.
 
 When a caller wants to book:
-1. Ask for their preferred day (today or tomorrow or specific date)
-2. Call check_availability_of_slots with start and end in UTC format:
-   - 9am IST = 03:30:00Z
-   - 7pm IST = 13:30:00Z
-   - For today: use current date
-   - For tomorrow: add 1 day
-   - Always use Z suffix
-   Example: start=2026-04-10T03:30:00Z
-            end=2026-04-10T13:30:00Z
-3. Read out available slots in IST (add 5h 30m to UTC time):
-   - 03:30Z = 9:00am
-   - 04:00Z = 9:30am
-   - 04:30Z = 10:00am
-   - 05:00Z = 10:30am
-   - 05:30Z = 11:00am
-   - 06:00Z = 11:30am
-   - 06:30Z = 12:00pm
-   - 07:00Z = 12:30pm
-   - 07:30Z = 1:00pm
-   - 08:00Z = 1:30pm
-   - 08:30Z = 2:00pm
-   Offer maximum 3 slots to caller.
+1. Ask for their preferred day (today, tomorrow, or specific date)
+2. Call check_availability_of_slots with:
+   - startTime: YYYY-MM-DDT09:00:00 (9am IST on preferred date)
+   - endTime: YYYY-MM-DDT17:00:00 (5pm IST on preferred date)
+   Use actual date not placeholder.
+   Example for today April 10:
+     startTime: 2026-04-10T09:00:00
+     endTime: 2026-04-10T17:00:00
+3. Read out available slots to caller.
+   Offer maximum 3 slots.
 4. Once caller confirms a slot:
-   Ask for their name if not collected
+   Collect their name if not already done.
 5. Call book_appointment with:
    - name: caller name
-   - start: exact UTC slot from step 2 (use value exactly as returned)
-6. Confirm to caller in IST:
-   "Perfect [name]! You are booked for [date] at [IST time]. The team will see you then!"
+   - preferred_date: YYYY-MM-DD
+   - preferred_time: HH:MM (24hr format)
+     Example: 10:00 for 10am,
+              14:30 for 2:30pm
+6. Confirm booking:
+   "Perfect [name]! You are booked for [date] at [time]. The team will see you then!"
 
 Rules:
 - Always check availability BEFORE booking
 - Never make up slot times
-- Use exact slot values from API
+- Only book after caller confirms
 - Never call book_appointment twice
-- If no slots available:
+- If no slots available say:
   "I don't see availability for that time. Would you like to try a different day?"
 ` : ''}
   `.trim()
