@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
           {
             key: 'check_availability_of_slots',
             name: 'check_availability_of_slots',
-            description: 'Fetch available appointment slots before booking. Always call this before booking to show caller available times.',
+            description: 'Fetch available appointment slots. Call this BEFORE booking to show the caller available times. Use startTime as today or tomorrow morning (09:00) and endTime as the same day evening (18:00) in Asia/Kolkata timezone. Format: YYYY-MM-DDTHH:MM:SS+05:30',
             parameters: {
               type: 'object',
               required: ['startTime', 'endTime'],
@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
           {
             key: 'book_appointment',
             name: 'book_appointment',
-            description: 'Book an appointment after caller confirms a slot. Only call after caller has confirmed the time.',
+            description: 'Book an appointment after the caller confirms a specific time slot. Only call AFTER caller has confirmed. Use the exact slot time returned by check_availability_of_slots.',
             parameters: {
               type: 'object',
               required: ['name', 'preferred_date', 'preferred_time'],
@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
         ],
         tools_params: {
           check_availability_of_slots: {
-            url: `https://api.cal.com/v1/slots?apiKey=${calIntegration.api_key}`,
+            url: 'https://api.cal.com/v2/slots',
             param: {
               eventTypeId: calIntegration.event_type_id,
               startTime: '%(startTime)s',
@@ -137,28 +137,31 @@ Deno.serve(async (req) => {
               timeZone: 'Asia/Kolkata'
             },
             method: 'GET',
-            headers: {},
+            headers: {
+              'Authorization': `Bearer ${calIntegration.api_key}`,
+              'cal-api-version': '2024-09-04'
+            },
             api_token: null
           },
           book_appointment: {
-            url: `https://api.cal.com/v1/bookings?apiKey=${calIntegration.api_key}`,
+            url: 'https://api.cal.com/v2/bookings',
             param: {
               eventTypeId: parseInt(calIntegration.event_type_id),
-              start: '%(preferred_date)sT%(preferred_time)s:00.000+05:30',
-              language: 'en',
-              metadata: {},
-              timeZone: 'Asia/Kolkata',
-              responses: {
+              start: '%(preferred_date)sT%(preferred_time)s:00+05:30',
+              attendee: {
                 name: '%(name)s',
                 email: 'booking@tushietrials.ca',
-                location: {
-                  value: 'inPerson',
-                  optionValue: ''
-                }
-              }
+                timeZone: 'Asia/Kolkata',
+                language: 'en'
+              },
+              metadata: {}
             },
             method: 'POST',
-            headers: {},
+            headers: {
+              'Authorization': `Bearer ${calIntegration.api_key}`,
+              'cal-api-version': '2024-08-13',
+              'Content-Type': 'application/json'
+            },
             api_token: null
           }
         }

@@ -79,23 +79,31 @@ const IntegrationsPage = () => {
   const isCalConnected = !!calIntegration?.api_key;
 
   const handleFetchEvents = async () => {
+    if (!apiKey.trim()) {
+      setFetchError("Please enter your API key");
+      return;
+    }
     setFetchError("");
     setFetchingEvents(true);
     try {
-      const res = await fetch("https://api.cal.com/v1/event-types", {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-      });
-      if (!res.ok) throw new Error("Invalid API key");
-      const json = await res.json();
-      const types = json.event_types || json.data || [];
-      if (!types.length) throw new Error("No event types found");
-      setEventTypes(types);
+      const { data, error } = await supabase.functions.invoke(
+        "fetch-calcom-events",
+        { body: { api_key: apiKey } }
+      );
+      if (error || !data?.success) {
+        setFetchError(
+          data?.error || error?.message || "Failed to fetch events. Check your API key."
+        );
+        return;
+      }
+      if (!data.events || data.events.length === 0) {
+        setFetchError("No event types found. Create an event type in Cal.com first.");
+        return;
+      }
+      setEventTypes(data.events);
       setStep(2);
-    } catch (e: any) {
-      setFetchError(e.message || "Invalid API key. Please check and try again.");
+    } catch (e) {
+      setFetchError("Failed to connect to Cal.com. Please try again.");
     } finally {
       setFetchingEvents(false);
     }
@@ -345,7 +353,9 @@ const IntegrationsPage = () => {
                 </p>
               </div>
               {fetchError && (
-                <p className="text-sm text-destructive">{fetchError}</p>
+                <div className="bg-destructive/10 text-destructive rounded-lg p-3 text-sm">
+                  ❌ {fetchError}
+                </div>
               )}
               <Button
                 className="w-full"
