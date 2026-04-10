@@ -85,14 +85,14 @@ Deno.serve(async (req) => {
               "Fetch the available free slots of appointment booking before booking the appointment. Always call this before booking.",
             parameters: {
               type: "object",
-              required: ["startTime", "endTime"],
+              required: ["start", "end"],
               properties: {
-                startTime: {
+                start: {
                   type: "string",
                   description:
                     "Start of time range in ISO 8601 format with Z suffix. For 9am IST use T03:30:00Z. Example for today: 2026-04-10T03:30:00Z Example for tomorrow: 2026-04-11T03:30:00Z",
                 },
-                endTime: {
+                end: {
                   type: "string",
                   description:
                     "End of time range in ISO 8601 format with Z suffix. For 5pm IST use T11:30:00Z. Example for today: 2026-04-10T11:30:00Z Example for tomorrow: 2026-04-11T11:30:00Z",
@@ -126,15 +126,16 @@ Deno.serve(async (req) => {
         ],
         tools_params: {
           check_availability_of_slots: {
-            url: "https://api.cal.com/v2/slots",
+            url: "https://api.cal.com/v2/slots/available",
             param: {
               eventTypeId: calIntegration.event_type_id,
-              startTime: "%(startTime)s",
-              endTime: "%(endTime)s",
+              start: "%(start)s",
+              end: "%(end)s",
+              timeZone: "Asia/Kolkata",
             },
             method: "GET",
             headers: {
-              "Authorization": `Bearer ${calIntegration.api_key}`,
+              Authorization: `Bearer ${calIntegration.api_key}`,
               "cal-api-version": "2024-09-04",
               "Content-Type": "application/json",
             },
@@ -155,7 +156,7 @@ Deno.serve(async (req) => {
             },
             method: "POST",
             headers: {
-              "Authorization": `Bearer ${calIntegration.api_key}`,
+              Authorization: `Bearer ${calIntegration.api_key}`,
               "cal-api-version": "2024-08-13",
               "Content-Type": "application/json",
             },
@@ -225,49 +226,7 @@ Deno.serve(async (req) => {
     const bolna_agent_id = createRes.data.agent_id;
     console.log("create-bolna-agent: Created:", bolna_agent_id);
 
-    const voxNumber = agent.vox_number || "+16813033721";
-    const phoneNumberId = agent.bolna_phone_number_id || "58cf9c77-e784-423f-9cb5-48bcf655fe25";
-    console.log("create-bolna-agent: vox_number:", voxNumber);
-    console.log("create-bolna-agent: phone_number_id:", phoneNumberId);
-
-    if (!phoneNumberId) {
-      console.log("create-bolna-agent: No phone number ID found — skipping phone linking. Run provision-vox-number first.");
-      await supabaseAdmin
-        .from("agents")
-        .update({
-          bolna_agent_id,
-          compiled_prompt,
-          status: "provisioning",
-          onboarding_complete: true,
-          last_rebuilt_language: agent.language_primary,
-          last_rebuilt_voice: agent.voice,
-        })
-        .eq("id", agent_id);
-
-      // Mark Cal.com integration as active after successful agent creation
-      if (hasCalcom) {
-        await supabaseAdmin
-          .from("integrations")
-          .update({ is_active: true })
-          .eq("agent_id", agent_id)
-          .eq("type", "calcom");
-      }
-
-      console.log("create-bolna-agent: Supabase updated (no phone link):", bolna_agent_id);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          bolna_agent_id,
-          vox_number: null,
-          phone_linked: false,
-          note: "Agent created but no phone number assigned yet. Run provision-vox-number.",
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    const PHONE_NUMBER_ID = phoneNumberId;
+    const PHONE_NUMBER_ID = "58cf9c77-e784-423f-9cb5-48bcf655fe25";
     console.log("create-bolna-agent: Linking number:", PHONE_NUMBER_ID);
 
     const linkRes = await bolnaFetch("/inbound/setup", {
@@ -292,7 +251,7 @@ Deno.serve(async (req) => {
       .update({
         bolna_agent_id,
         compiled_prompt,
-        vox_number: voxNumber,
+        vox_number: "+16813033721",
         status: linkRes.ok ? "active" : "provisioning",
         onboarding_complete: true,
         last_rebuilt_language: agent.language_primary,
@@ -315,7 +274,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         bolna_agent_id,
-        vox_number: voxNumber,
+        vox_number: "+16813033721",
         phone_linked: linkRes.ok,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
