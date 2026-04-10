@@ -85,18 +85,18 @@ Deno.serve(async (req) => {
           {
             key: 'check_availability_of_slots',
             name: 'check_availability_of_slots',
-            description: 'Fetch available appointment slots. Call this BEFORE booking to show the caller available times. Use startTime as today or tomorrow morning (09:00) and endTime as the same day evening (18:00) in Asia/Kolkata timezone. Format: YYYY-MM-DDTHH:MM:SS+05:30',
+            description: 'Fetch available appointment slots from the calendar. Call this BEFORE booking to show the caller available times. Pass start and end as UTC date strings. For today use start=TODAY_DATE+T03:30:00Z and end=TODAY_DATE+T13:30:00Z which is 9am to 7pm IST. For tomorrow add 1 day to both dates.',
             parameters: {
               type: 'object',
-              required: ['startTime', 'endTime'],
+              required: ['start', 'end'],
               properties: {
-                startTime: {
+                start: {
                   type: 'string',
-                  description: 'Start of the time range to check in ISO format YYYY-MM-DDTHH:MM:SS. Use today or tomorrow based on caller preference.'
+                  description: 'Start of time range in UTC ISO 8601 format. IST is UTC+5:30 so 9am IST = 03:30:00Z. Example for today: 2026-04-10T03:30:00Z Example for tomorrow: 2026-04-11T03:30:00Z Always use Z suffix for UTC.'
                 },
-                endTime: {
+                end: {
                   type: 'string',
-                  description: 'End of the time range to check in ISO format YYYY-MM-DDTHH:MM:SS. Always 8 hours after startTime.'
+                  description: 'End of time range in UTC ISO 8601 format. 7pm IST = 13:30:00Z. Example for today: 2026-04-10T13:30:00Z Example for tomorrow: 2026-04-11T13:30:00Z Always use Z suffix for UTC.'
                 }
               }
             },
@@ -105,26 +105,22 @@ Deno.serve(async (req) => {
           {
             key: 'book_appointment',
             name: 'book_appointment',
-            description: 'Book an appointment after the caller confirms a specific time slot. Only call AFTER caller has confirmed. Use the exact slot time returned by check_availability_of_slots.',
+            description: 'Book an appointment after the caller confirms a specific time slot. Only call AFTER caller has confirmed. Use the exact slot time returned by check_availability_of_slots. Convert IST time to UTC by subtracting 5 hours 30 minutes. Example: 10am IST = 04:30:00Z',
             parameters: {
               type: 'object',
-              required: ['name', 'preferred_date', 'preferred_time'],
+              required: ['name', 'start'],
               properties: {
                 name: {
                   type: 'string',
                   description: 'Full name of the caller.'
                 },
-                preferred_date: {
+                start: {
                   type: 'string',
-                  description: 'Date of appointment in YYYY-MM-DD format.'
-                },
-                preferred_time: {
-                  type: 'string',
-                  description: 'Time of appointment in HH:MM format 24 hour.'
+                  description: 'Exact start time of the chosen slot in UTC ISO 8601 format with Z suffix. Use the exact value returned by check_availability_of_slots. Example: 2026-04-10T04:30:00Z'
                 }
               }
             },
-            pre_call_message: 'Perfect, let me book that for you now.'
+            pre_call_message: 'Perfect, let me book that for you right now.'
           }
         ],
         tools_params: {
@@ -132,8 +128,8 @@ Deno.serve(async (req) => {
             url: 'https://api.cal.com/v2/slots',
             param: {
               eventTypeId: calIntegration.event_type_id,
-              startTime: '%(startTime)s',
-              endTime: '%(endTime)s',
+              start: '%(start)s',
+              end: '%(end)s',
               timeZone: 'Asia/Kolkata'
             },
             method: 'GET',
@@ -147,7 +143,7 @@ Deno.serve(async (req) => {
             url: 'https://api.cal.com/v2/bookings',
             param: {
               eventTypeId: parseInt(calIntegration.event_type_id),
-              start: '%(preferred_date)sT%(preferred_time)s:00+05:30',
+              start: '%(start)s',
               attendee: {
                 name: '%(name)s',
                 email: 'booking@tushietrials.ca',
