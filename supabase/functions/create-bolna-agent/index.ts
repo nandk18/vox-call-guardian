@@ -42,8 +42,7 @@ Deno.serve(async (req) => {
       agent.voice || "female",
     );
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const webhookUrl = `${supabaseUrl}/functions/v1/handle-call-webhook`;
+    const webhookUrl = `${Deno.env.get("SUPABASE_URL") ?? ""}/functions/v1/handle-call-webhook`;
 
     // Dynamic phone number from agents table
     const voxNumber = agent.vox_number || "+16813033721";
@@ -56,7 +55,6 @@ Deno.serve(async (req) => {
     console.log("create-bolna-agent: vox_number:", voxNumber);
     console.log("create-bolna-agent: phone_number_id:", phoneNumberId);
 
-    // Build tools_config WITHOUT api_tools — Cal.com tools added via PATCH after agent creation
     const toolsConfig: any = {
       input: { format: "wav", provider: "twilio" },
       output: { format: "wav", provider: "twilio" },
@@ -79,6 +77,98 @@ Deno.serve(async (req) => {
         agent_flow_type: "streaming",
       },
     };
+
+    // Add Cal.com tools in native Bolna format using v1 API
+    if (hasCalcom) {
+      toolsConfig.api_tools = {
+        tools: [
+          {
+            key: "check_availability_of_slots",
+            name: "check_availability_of_slots",
+            description:
+              "Fetch the available free slots of appointment booking before booking the appointment. Always call this before booking.",
+            parameters: {
+              type: "object",
+              required: ["startTime", "endTime"],
+              properties: {
+                startTime: {
+                  type: "string",
+                  description:
+                    "Start of the time range in ISO format YYYY-MM-DDTHH:MM:SS. Use today or tomorrow based on caller preference. For 9am IST use: DATE+T09:00:00. Example: 2026-04-10T09:00:00",
+                },
+                endTime: {
+                  type: "string",
+                  description:
+                    "End of the time range in ISO format YYYY-MM-DDTHH:MM:SS. Always 8 hours after startTime. For 5pm IST use: DATE+T17:00:00. Example: 2026-04-10T17:00:00",
+                },
+              },
+            },
+            pre_call_message: "Just give me a moment, I will be back with you.",
+          },
+          {
+            key: "book_appointment",
+            name: "book_appointment",
+            description:
+              "Book an appointment after caller confirms a slot. Only call after caller has confirmed the time.",
+            parameters: {
+              type: "object",
+              required: ["name", "preferred_date", "preferred_time"],
+              properties: {
+                name: {
+                  type: "string",
+                  description: "Full name of the caller.",
+                },
+                preferred_date: {
+                  type: "string",
+                  description:
+                    "Date of appointment in YYYY-MM-DD format. Example: 2026-04-10",
+                },
+                preferred_time: {
+                  type: "string",
+                  description:
+                    "Time of appointment in HH:MM 24 hour format. Example: 10:00 for 10am, 14:30 for 2:30pm",
+                },
+              },
+            },
+            pre_call_message: "Perfect, let me book that for you now.",
+          },
+        ],
+        tools_params: {
+          check_availability_of_slots: {
+            url: "https://api.cal.com/v1/slots",
+            param: {
+              apiKey: calIntegration.api_key,
+              eventTypeId: calIntegration.event_type_id,
+              startTime: "%(startTime)s",
+              endTime: "%(endTime)s",
+              timeZone: "Asia/Kolkata",
+            },
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
+            api_token: null,
+          },
+          book_appointment: {
+            url: "https://api.cal.com/v1/bookings",
+            param: {
+              apiKey: calIntegration.api_key,
+              eventTypeId: parseInt(calIntegration.event_type_id),
+              start: "%(preferred_date)sT%(preferred_time)s:00.000+05:30",
+              language: "en",
+              metadata: {},
+              timeZone: "Asia/Kolkata",
+              responses: {
+                name: "%(name)s",
+                email: "booking@tushietrials.ca",
+                location: { value: "inPerson", optionValue: "" },
+              },
+            },
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            api_token: null,
+          },
+        },
+      };
+    }
 
     const createBody = {
       agent_config: {
@@ -139,113 +229,7 @@ Deno.serve(async (req) => {
     const bolna_agent_id = createRes.data.agent_id;
     console.log("create-bolna-agent: Created:", bolna_agent_id);
 
-    // STEP 2 — PATCH Cal.com tools with actual bolna_agent_id in proxy URLs
-    if (hasCalcom) {
-      const slotsProxyUrl =
-        `${supabaseUrl}/functions/v1/calcom-slots-proxy?bolna_agent_id=${bolna_agent_id}`;
-      const bookProxyUrl =
-        `${supabaseUrl}/functions/v1/calcom-book-proxy`;
-
-      const toolsPatch = await bolnaFetch(
-        `/v2/agent/${bolna_agent_id}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            tasks: [
-              {
-                task_type: "conversation",
-                tools_config: {
-                  api_tools: {
-                    tools: [
-                      {
-                        key: "check_availability_of_slots",
-                        name: "check_availability_of_slots",
-                        description:
-                          "Fetch available appointment slots before booking. Always call this before booking.",
-                        parameters: {
-                          type: "object",
-                          required: ["startTime", "endTime"],
-                          properties: {
-                            startTime: {
-                              type: "string",
-                              description:
-                                "Start of time range in UTC ISO 8601 with Z suffix. 9am IST = T03:30:00Z. Example: 2026-04-10T03:30:00Z",
-                            },
-                            endTime: {
-                              type: "string",
-                              description:
-                                "End of time range in UTC ISO 8601 with Z suffix. 5pm IST = T11:30:00Z. Example: 2026-04-10T11:30:00Z",
-                            },
-                          },
-                        },
-                        pre_call_message: "Just a moment, let me check availability.",
-                      },
-                      {
-                        key: "book_appointment",
-                        name: "book_appointment",
-                        description:
-                          "Book appointment after caller confirms a slot. Only call AFTER caller confirms.",
-                        parameters: {
-                          type: "object",
-                          required: ["name", "start"],
-                          properties: {
-                            name: {
-                              type: "string",
-                              description: "Full name of the caller.",
-                            },
-                            start: {
-                              type: "string",
-                              description:
-                                "Exact UTC slot time from check_availability_of_slots. Example: 2026-04-10T04:30:00Z",
-                            },
-                          },
-                        },
-                        pre_call_message: "Perfect, booking that for you now.",
-                      },
-                    ],
-                    tools_params: {
-                      check_availability_of_slots: {
-                        url: slotsProxyUrl,
-                        param: {
-                          startTime: "%(startTime)s",
-                          endTime: "%(endTime)s",
-                        },
-                        method: "GET",
-                        headers: {
-                          "Content-Type": "application/json",
-                        },
-                        api_token: null,
-                      },
-                      book_appointment: {
-                        url: bookProxyUrl,
-                        param: {
-                          name: "%(name)s",
-                          start: "%(start)s",
-                        },
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                        },
-                        api_token: null,
-                      },
-                    },
-                  },
-                },
-              },
-            ],
-          }),
-        },
-      );
-
-      console.log(
-        "create-bolna-agent: Cal.com tools PATCH:",
-        JSON.stringify({
-          ok: toolsPatch.ok,
-          status: toolsPatch.status,
-          data: JSON.stringify(toolsPatch.data).slice(0, 200),
-        }),
-      );
-    }
+    // Cal.com tools included in initial POST — no PATCH needed
 
     // Handle missing phone number — skip phone linking
     if (!phoneNumberId) {
