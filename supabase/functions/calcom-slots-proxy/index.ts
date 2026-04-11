@@ -16,9 +16,9 @@ Deno.serve(async (req) => {
     const startTime = url.searchParams.get("startTime");
     const endTime = url.searchParams.get("endTime");
     const eventTypeId = url.searchParams.get("eventTypeId");
-    const agentId = url.searchParams.get("agent_id") || url.searchParams.get("agentId");
+    const bolnaAgentId = url.searchParams.get("bolna_agent_id") || url.searchParams.get("agent_id") || url.searchParams.get("agentId");
 
-    console.log("calcom-slots-proxy:", { startTime, endTime, eventTypeId, agentId });
+    console.log("calcom-slots-proxy params:", { bolnaAgentId, startTime, endTime, eventTypeId });
 
     if (!startTime || !endTime) {
       return new Response(
