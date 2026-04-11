@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!agentId) {
+    if (!bolnaAgentId) {
       return new Response(
         JSON.stringify({ error: "agent_id required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     const { data: agent } = await supabaseAdmin
       .from("agents")
       .select("id")
-      .eq("bolna_agent_id", agentId)
+      .eq("bolna_agent_id", bolnaAgentId)
       .maybeSingle();
 
     if (!agent) {
