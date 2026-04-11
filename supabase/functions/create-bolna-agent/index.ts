@@ -45,10 +45,16 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const webhookUrl = `${supabaseUrl}/functions/v1/handle-call-webhook`;
 
+    // Dynamic phone number from agents table
+    const voxNumber = agent.vox_number || "+16813033721";
+    const phoneNumberId = agent.bolna_phone_number_id || "58cf9c77-e784-423f-9cb5-48bcf655fe25";
+
     console.log("create-bolna-agent: business:", agent.business_name);
     console.log("create-bolna-agent: language:", agent.language_primary);
     console.log("create-bolna-agent: voice:", agent.voice, "→", synthesizer.provider_config.voice);
     console.log("create-bolna-agent: transcriber:", JSON.stringify(transcriber));
+    console.log("create-bolna-agent: vox_number:", voxNumber);
+    console.log("create-bolna-agent: phone_number_id:", phoneNumberId);
 
     // Build tools_config
     const toolsConfig: any = {
@@ -74,7 +80,7 @@ Deno.serve(async (req) => {
       },
     };
 
-    // Add Cal.com api_tools if connected
+    // Add Cal.com api_tools if connected — point to proxy edge functions
     if (hasCalcom) {
       toolsConfig.api_tools = {
         tools: [
@@ -85,14 +91,14 @@ Deno.serve(async (req) => {
               "Fetch the available free slots of appointment booking before booking the appointment. Always call this before booking.",
             parameters: {
               type: "object",
-              required: ["start", "end"],
+              required: ["startTime", "endTime"],
               properties: {
-                start: {
+                startTime: {
                   type: "string",
                   description:
                     "Start of time range in ISO 8601 format with Z suffix. For 9am IST use T03:30:00Z. Example for today: 2026-04-10T03:30:00Z Example for tomorrow: 2026-04-11T03:30:00Z",
                 },
-                end: {
+                endTime: {
                   type: "string",
                   description:
                     "End of time range in ISO 8601 format with Z suffix. For 5pm IST use T11:30:00Z. Example for today: 2026-04-10T11:30:00Z Example for tomorrow: 2026-04-11T11:30:00Z",
@@ -126,38 +132,28 @@ Deno.serve(async (req) => {
         ],
         tools_params: {
           check_availability_of_slots: {
-            url: "https://api.cal.com/v2/slots/available",
+            url: `${supabaseUrl}/functions/v1/calcom-slots-proxy`,
             param: {
+              startTime: "%(startTime)s",
+              endTime: "%(endTime)s",
               eventTypeId: calIntegration.event_type_id,
-              start: "%(start)s",
-              end: "%(end)s",
-              timeZone: "Asia/Kolkata",
+              agent_id: "{{agent_id}}",
             },
             method: "GET",
             headers: {
-              Authorization: `Bearer ${calIntegration.api_key}`,
-              "cal-api-version": "2024-09-04",
               "Content-Type": "application/json",
             },
             api_token: null,
           },
           book_appointment: {
-            url: "https://api.cal.com/v2/bookings",
+            url: `${supabaseUrl}/functions/v1/calcom-book-proxy`,
             param: {
-              eventTypeId: parseInt(calIntegration.event_type_id),
+              name: "%(name)s",
               start: "%(start)s",
-              attendee: {
-                name: "%(name)s",
-                email: "booking@tushietrials.ca",
-                timeZone: "Asia/Kolkata",
-                language: "en",
-              },
-              metadata: {},
+              agent_id: "{{agent_id}}",
             },
             method: "POST",
             headers: {
-              Authorization: `Bearer ${calIntegration.api_key}`,
-              "cal-api-version": "2024-08-13",
               "Content-Type": "application/json",
             },
             api_token: null,
@@ -198,7 +194,6 @@ Deno.serve(async (req) => {
       },
     };
 
-    //console.log('create-bolna-agent: POST body (first 500):', JSON.stringify(createBody).slice(0, 500))
     console.log("create-bolna-agent: FULL POST body:", JSON.stringify(createBody));
 
     const createRes = await bolnaFetch("/v2/agent", {
@@ -226,7 +221,42 @@ Deno.serve(async (req) => {
     const bolna_agent_id = createRes.data.agent_id;
     console.log("create-bolna-agent: Created:", bolna_agent_id);
 
-    const PHONE_NUMBER_ID = "58cf9c77-e784-423f-9cb5-48bcf655fe25";
+    // Handle missing phone number — skip phone linking
+    if (!phoneNumberId) {
+      console.log("create-bolna-agent: No phone number ID — skipping link. Run provision-vox-number first.");
+
+      await supabaseAdmin
+        .from("agents")
+        .update({
+          bolna_agent_id,
+          compiled_prompt,
+          status: "provisioning",
+          onboarding_complete: true,
+          last_rebuilt_language: agent.language_primary,
+          last_rebuilt_voice: agent.voice,
+        })
+        .eq("id", agent_id);
+
+      if (hasCalcom) {
+        await supabaseAdmin
+          .from("integrations")
+          .update({ is_active: true })
+          .eq("agent_id", agent_id)
+          .eq("type", "calcom");
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          bolna_agent_id,
+          vox_number: null,
+          phone_linked: false,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const PHONE_NUMBER_ID = phoneNumberId;
     console.log("create-bolna-agent: Linking number:", PHONE_NUMBER_ID);
 
     const linkRes = await bolnaFetch("/inbound/setup", {
@@ -251,7 +281,7 @@ Deno.serve(async (req) => {
       .update({
         bolna_agent_id,
         compiled_prompt,
-        vox_number: "+16813033721",
+        vox_number: voxNumber,
         status: linkRes.ok ? "active" : "provisioning",
         onboarding_complete: true,
         last_rebuilt_language: agent.language_primary,
@@ -274,7 +304,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         bolna_agent_id,
-        vox_number: "+16813033721",
+        vox_number: voxNumber,
         phone_linked: linkRes.ok,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
