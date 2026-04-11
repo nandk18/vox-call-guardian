@@ -16,9 +16,9 @@ Deno.serve(async (req) => {
     const startTime = url.searchParams.get("startTime");
     const endTime = url.searchParams.get("endTime");
     const eventTypeId = url.searchParams.get("eventTypeId");
-    const agentId = url.searchParams.get("agent_id") || url.searchParams.get("agentId");
+    const bolnaAgentId = url.searchParams.get("bolna_agent_id") || url.searchParams.get("agent_id") || url.searchParams.get("agentId");
 
-    console.log("calcom-slots-proxy:", { startTime, endTime, eventTypeId, agentId });
+    console.log("calcom-slots-proxy params:", { bolnaAgentId, startTime, endTime, eventTypeId });
 
     if (!startTime || !endTime) {
       return new Response(
@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!agentId) {
+    if (!bolnaAgentId) {
       return new Response(
         JSON.stringify({ error: "agent_id required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     const { data: agent } = await supabaseAdmin
       .from("agents")
       .select("id")
-      .eq("bolna_agent_id", agentId)
+      .eq("bolna_agent_id", bolnaAgentId)
       .maybeSingle();
 
     if (!agent) {
