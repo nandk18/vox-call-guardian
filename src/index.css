@@ -48,6 +48,11 @@
     --surface: 220 18% 10%;
     --surface-light: 220 15% 14%;
     --glow: 160 100% 45%;
+
+    --sat: env(safe-area-inset-top);
+    --sar: env(safe-area-inset-right);
+    --sab: env(safe-area-inset-bottom);
+    --sal: env(safe-area-inset-left);
   }
 }
 
@@ -60,6 +65,7 @@
   html {
     scroll-behavior: smooth;
     height: 100%;
+    overscroll-behavior: none;
   }
 
   body {
@@ -92,5 +98,21 @@
   .scroll-container {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
+  }
+}
+
+/* PWA standalone mode fixes */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .bottom-nav {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    height: calc(60px + env(safe-area-inset-bottom));
+  }
+
+  .main-content {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom) + 16px);
   }
 }

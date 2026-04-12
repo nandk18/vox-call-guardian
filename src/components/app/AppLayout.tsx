@@ -39,7 +39,6 @@ const AppLayout = () => {
   const initial = email.charAt(0).toUpperCase();
   const pageTitle = pageTitles[location.pathname] ?? "Vox";
 
-  // Fetch agent for trial info
   const { data: agent } = useQuery({
     queryKey: ["agent", user?.id],
     queryFn: async () => {
@@ -53,7 +52,6 @@ const AppLayout = () => {
     enabled: !!user,
   });
 
-  // Unread calls count
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ["unread-calls", user?.id],
     queryFn: async () => {
@@ -74,7 +72,6 @@ const AppLayout = () => {
     refetchInterval: 30000,
   });
 
-  // Realtime subscription for unread badge
   const [badgePulse, setBadgePulse] = useState(false);
   useEffect(() => {
     if (!agent?.id) return;
@@ -132,7 +129,7 @@ const AppLayout = () => {
       <PWAInstallPrompt />
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col items-center w-[72px] border-r border-border bg-card py-4 fixed h-full z-40">
+      <aside className="hidden md:flex flex-col items-center w-[72px] border-r border-border bg-card fixed h-full z-40" style={{ paddingTop: "max(16px, env(safe-area-inset-top))" }}>
         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg mb-8">
           V
         </div>
@@ -164,7 +161,7 @@ const AppLayout = () => {
           ))}
         </nav>
 
-        <div className="flex flex-col items-center gap-3 mt-auto">
+        <div className="flex flex-col items-center gap-3 mt-auto pb-4">
           {daysLeft !== null && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -183,7 +180,7 @@ const AppLayout = () => {
 
       {/* Main area */}
       <div className="flex-1 md:ml-[72px] flex flex-col h-full overflow-hidden">
-        <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-card/80 backdrop-blur-xl sticky top-0 z-30 shrink-0">
+        <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-card/80 backdrop-blur-xl sticky z-30 shrink-0" style={{ paddingTop: "max(0px, env(safe-area-inset-top))", top: "max(0px, env(safe-area-inset-top))" }}>
           <span className="text-primary font-bold text-lg md:hidden">Vox</span>
           <span className="hidden md:block text-primary font-bold text-lg">Vox</span>
           <span className="font-semibold text-sm absolute left-1/2 -translate-x-1/2">{pageTitle}</span>
@@ -220,7 +217,6 @@ const AppLayout = () => {
           </div>
         </header>
 
-        {/* Trial banner */}
         {showTrialBanner && !trialDismissed && (
           <div className="bg-orange-500 text-white px-4 py-2.5 flex items-center justify-between text-sm shrink-0">
             <span>⚠️ Your trial ends in {daysLeft} day{daysLeft !== 1 ? "s" : ""} — subscribe to keep your Vox number</span>
@@ -233,13 +229,13 @@ const AppLayout = () => {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden scroll-container p-4 md:p-6 pb-24 md:pb-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden scroll-container main-content p-4 md:p-6 pb-24 md:pb-6">
           <Outlet />
         </main>
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border flex items-center justify-around z-40" style={{ height: "60px", paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border flex items-center justify-around z-40 bottom-nav" style={{ height: "calc(60px + env(safe-area-inset-bottom, 0px))", paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}>
         {navItems.map((item) => (
           <NavLink
             key={item.to}
