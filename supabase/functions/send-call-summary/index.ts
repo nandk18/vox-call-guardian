@@ -1,3 +1,4 @@
+// See /docs/TECHNICAL_GUIDE.md for full architecture documentation
 import { supabaseAdmin } from '../_shared/supabaseAdmin.ts'
 import { corsHeaders } from '../_shared/cors.ts'
 
@@ -38,7 +39,9 @@ Deno.serve(async (req) => {
         summary: 'Test call summary. If you received this, your notifications are working correctly!',
         caller_urgency: 'low',
         preferred_callback_time: 'Anytime',
-        transcript: []
+        transcript: [],
+        created_at: new Date().toISOString(),
+        recording_url: ''
       }
     } else {
       const { data: callData } = await supabaseAdmin.from('calls').select('*').eq('id', call_id).single()
@@ -72,6 +75,7 @@ ${Deno.env.get('VOX_APP_URL') || 'https://vox-call-guardian.lovable.app'}/app/in
     let whatsappSent = false
     let smsSent = false
     let emailSent = false
+    let zapierSent = false
     const debugResponses: Record<string, any> = {}
 
     const shouldSendChannel = (channel: string) => {
@@ -80,7 +84,6 @@ ${Deno.env.get('VOX_APP_URL') || 'https://vox-call-guardian.lovable.app'}/app/in
     }
 
     // WhatsApp via MSG91 requires pre-approved templates.
-    // Skipping until templates are approved.
     console.log('WhatsApp skipped: pre-approved templates required.')
     whatsappSent = false
 
@@ -163,13 +166,53 @@ ${Deno.env.get('VOX_APP_URL') || 'https://vox-call-guardian.lovable.app'}/app/in
       }
     }
 
+    // Send to Zapier for Google Sheets
+    const ZAPIER_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/26174803/u7lsamc/'
+
+    try {
+      const zapierPayload = {
+        date_time: new Date(call.created_at).toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        }),
+        caller_number: call.caller_number || 'Unknown',
+        caller_name: call.caller_name || 'Not provided',
+        duration_secs: call.duration_secs || 0,
+        outcome: call.outcome || 'unknown',
+        caller_need: call.caller_need || 'Not captured',
+        urgency: call.caller_urgency || 'low',
+        summary: call.summary || 'No summary available',
+        business_name: agent.business_name || '',
+        recording_url: call.recording_url || '',
+        inbox_url: `${Deno.env.get('VOX_APP_URL') || 'https://vox-call-guardian.lovable.app'}/app/inbox`
+      }
+
+      const zapierRes = await fetch(ZAPIER_WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(zapierPayload)
+      })
+
+      zapierSent = zapierRes.ok
+      console.log('Zapier webhook:', zapierRes.status, zapierRes.ok ? 'success' : 'failed')
+      debugResponses.zapier = { status: zapierRes.status, ok: zapierRes.ok }
+    } catch (e) {
+      console.error('Zapier webhook error:', e)
+      debugResponses.zapier = { error: String(e) }
+    }
+
     // Mark notification as sent (only for real calls)
     if (!test_mode && call_id) {
       await supabaseAdmin.from('calls').update({ notification_sent: true }).eq('id', call_id)
     }
 
     return new Response(
-      JSON.stringify({ success: true, whatsappSent, smsSent, emailSent, ...(test_mode ? { debug: debugResponses } : {}) }),
+      JSON.stringify({ success: true, whatsappSent, smsSent, emailSent, zapierSent, ...(test_mode ? { debug: debugResponses } : {}) }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (err) {

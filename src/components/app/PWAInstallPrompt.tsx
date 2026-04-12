@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { X, Share, Plus } from "lucide-react";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -16,18 +17,15 @@ const PWAInstallPrompt = () => {
       return;
     }
 
-    // Check if already installed
     if (window.matchMedia("(display-mode: standalone)").matches) return;
     if ((navigator as any).standalone === true) return;
 
-    // Chrome/Android
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
     window.addEventListener("beforeinstallprompt", handler);
 
-    // iOS detection
     const ua = navigator.userAgent;
     if (/iPhone|iPad/.test(ua) && !(navigator as any).standalone) {
       setShowIOSPrompt(true);
@@ -59,42 +57,68 @@ const PWAInstallPrompt = () => {
 
   return (
     <div
-      className="fixed left-0 right-0 z-40 animate-in slide-in-from-bottom duration-300"
-      style={{ bottom: "60px", paddingBottom: "env(safe-area-inset-bottom)" }}
+      className="fixed left-0 right-0 bottom-0 z-[999] animate-in slide-in-from-bottom duration-300"
     >
-      <div className="bg-card border-t border-primary/30 px-4 py-3 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm shrink-0">
-          V
+      <div
+        className="relative border-t-2 border-primary"
+        style={{
+          background: "#161a23",
+          borderRadius: "20px 20px 0 0",
+          padding: "20px 24px",
+          paddingBottom: "max(24px, env(safe-area-inset-bottom))",
+        }}
+      >
+        {/* Dismiss X */}
+        <button
+          onClick={handleDismiss}
+          className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Logo + Title */}
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg shrink-0">
+            V
+          </div>
+          <div>
+            <p className="text-base font-bold text-foreground">Install Vox</p>
+            <p className="text-[13px] text-muted-foreground">
+              Add to your home screen for the best experience
+            </p>
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          {showIOSPrompt ? (
-            <>
-              <p className="text-sm font-semibold text-foreground">Install Vox on iPhone</p>
-              <p className="text-xs text-muted-foreground">Tap <span className="inline-block">⬆️</span> Share then "Add to Home Screen"</p>
-            </>
-          ) : (
-            <>
-              <p className="text-sm font-semibold text-foreground">Install Vox</p>
-              <p className="text-xs text-muted-foreground">Add to home screen for quick access</p>
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={handleDismiss}
-            className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Not now
-          </button>
-          {deferredPrompt && (
+
+        {showIOSPrompt ? (
+          /* iOS instructions */
+          <div className="flex items-center gap-3 mt-4">
+            <div className="flex items-center gap-2 bg-secondary/60 rounded-full px-4 py-2">
+              <Share className="w-4 h-4 text-muted-foreground" />
+              <span className="text-[13px] text-muted-foreground">Tap Share</span>
+            </div>
+            <span className="text-muted-foreground text-xs">→</span>
+            <div className="flex items-center gap-2 bg-secondary/60 rounded-full px-4 py-2">
+              <Plus className="w-4 h-4 text-muted-foreground" />
+              <span className="text-[13px] text-muted-foreground">Add to Home Screen</span>
+            </div>
+          </div>
+        ) : (
+          /* Android/Chrome install button */
+          <div className="flex items-center gap-3 mt-4">
             <button
               onClick={handleInstall}
-              className="px-4 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded-full hover:bg-primary/90 transition-colors"
+              className="flex-1 py-3 bg-primary text-primary-foreground font-semibold rounded-full text-sm hover:bg-primary/90 transition-colors"
             >
-              Install
+              Add to Home Screen
             </button>
-          )}
-        </div>
+            <button
+              onClick={handleDismiss}
+              className="px-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Not now
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

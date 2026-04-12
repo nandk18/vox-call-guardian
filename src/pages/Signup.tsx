@@ -10,7 +10,6 @@ const Signup = () => {
   const { user } = useAuth();
   const [tab, setTab] = useState<"phone" | "email">("phone");
 
-  // Phone
   const [phone, setPhone] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -18,7 +17,6 @@ const Signup = () => {
   const [countdown, setCountdown] = useState(0);
   const [verifying, setVerifying] = useState(false);
 
-  // Email
   const [email, setEmail] = useState("");
   const [emailBizName, setEmailBizName] = useState("");
   const [emailSent, setEmailSent] = useState(false);
@@ -126,8 +124,8 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md bg-card border border-border rounded-2xl p-8">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4" style={{ paddingTop: "max(16px, env(safe-area-inset-top))" }}>
+      <div className="w-full max-w-md bg-card border border-border rounded-2xl p-8" style={{ marginTop: "max(24px, env(safe-area-inset-top))" }}>
         <div className="text-center mb-8">
           <Link to="/" className="text-3xl font-bold text-primary">Vox</Link>
         </div>
@@ -135,38 +133,18 @@ const Signup = () => {
         <h1 className="text-2xl font-bold text-center mb-1">Start your free 14-day trial</h1>
         <p className="text-muted-foreground text-center text-sm mb-6">No credit card needed</p>
 
-        {/* Tabs */}
         <div className="flex bg-secondary rounded-xl p-1 mb-6">
-          <button onClick={() => { setTab("phone"); setError(""); }} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tab === "phone" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
-            Phone
-          </button>
-          <button onClick={() => { setTab("email"); setError(""); }} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tab === "email" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
-            Email
-          </button>
+          <button onClick={() => { setTab("phone"); setError(""); }} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tab === "phone" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>Phone</button>
+          <button onClick={() => { setTab("email"); setError(""); }} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tab === "email" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>Email</button>
         </div>
 
         {tab === "phone" ? (
           !otpSent ? (
             <form onSubmit={handleSendOtp} className="space-y-4">
-              <input
-                type="text"
-                required
-                placeholder="Business Name"
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-base"
-              />
+              <input type="text" required placeholder="Business Name" value={businessName} onChange={(e) => setBusinessName(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-base" />
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-muted-foreground bg-secondary px-3 py-3 rounded-xl border border-input">+91</span>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  required
-                  placeholder="Enter mobile number"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  className="flex-1 px-4 py-3 rounded-xl bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-base"
-                />
+                <input type="tel" inputMode="numeric" required placeholder="Enter mobile number" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} className="flex-1 px-4 py-3 rounded-xl bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-base" />
               </div>
               {error && <p className="text-destructive text-sm">{error}</p>}
               <button type="submit" disabled={loading || phone.length !== 10} className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 min-h-[48px]">
@@ -178,19 +156,7 @@ const Signup = () => {
               <p className="text-sm text-muted-foreground text-center">Enter the 6-digit code sent to <strong className="text-foreground">+91 {phone}</strong></p>
               <div className="flex justify-center gap-2">
                 {otp.map((digit, i) => (
-                  <input
-                    key={i}
-                    id={`signup-otp-${i}`}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    value={digit}
-                    onChange={(e) => handleOtpChange(i, e.target.value)}
-                    onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                    className={`w-11 h-12 text-center text-lg font-bold rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                      error ? "border-destructive" : "border-border"
-                    }`}
-                  />
+                  <input key={i} id={`signup-otp-${i}`} type="text" inputMode="numeric" maxLength={6} value={digit} onChange={(e) => handleOtpChange(i, e.target.value)} onKeyDown={(e) => handleOtpKeyDown(i, e)} className={`w-11 h-12 text-center text-lg font-bold rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 ${error ? "border-destructive" : "border-border"}`} />
                 ))}
               </div>
               {error && <p className="text-destructive text-sm text-center">{error}</p>}
@@ -206,9 +172,7 @@ const Signup = () => {
                   <button onClick={handleResend} disabled={loading} className="text-xs text-primary hover:underline">Resend OTP</button>
                 )}
               </div>
-              <button onClick={() => { setOtpSent(false); setOtp(["", "", "", "", "", ""]); setError(""); }} className="text-xs text-muted-foreground hover:text-foreground w-full text-center">
-                ← Change number
-              </button>
+              <button onClick={() => { setOtpSent(false); setOtp(["", "", "", "", "", ""]); setError(""); }} className="text-xs text-muted-foreground hover:text-foreground w-full text-center">← Change number</button>
             </div>
           )
         ) : (
