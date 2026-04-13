@@ -129,7 +129,7 @@ const AppLayout = () => {
       <PWAInstallPrompt />
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col items-center w-[72px] border-r border-border bg-card fixed h-full z-40" style={{ paddingTop: "max(16px, env(safe-area-inset-top))" }}>
+      <aside className="hidden md:flex flex-col items-center w-[72px] border-r border-border bg-card fixed h-full z-40 pt-4">
         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg mb-8">
           V
         </div>
@@ -180,7 +180,7 @@ const AppLayout = () => {
 
       {/* Main area */}
       <div className="flex-1 md:ml-[72px] flex flex-col h-full overflow-hidden">
-        <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-card/80 backdrop-blur-xl sticky z-30 shrink-0" style={{ paddingTop: "max(0px, env(safe-area-inset-top))", top: "max(0px, env(safe-area-inset-top))" }}>
+        <header className="border-b border-border flex items-center justify-between px-4 bg-card/80 backdrop-blur-xl sticky top-0 z-30 shrink-0" style={{ paddingTop: "env(safe-area-inset-top, 0px)", minHeight: "calc(56px + env(safe-area-inset-top, 0px))" }}>
           <span className="text-primary font-bold text-lg md:hidden">Vox</span>
           <span className="hidden md:block text-primary font-bold text-lg">Vox</span>
           <span className="font-semibold text-sm absolute left-1/2 -translate-x-1/2">{pageTitle}</span>
@@ -229,13 +229,13 @@ const AppLayout = () => {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden scroll-container main-content p-4 md:p-6 pb-24 md:pb-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden scroll-container p-4 md:p-6 md:pb-6" style={{ paddingBottom: "calc(76px + env(safe-area-inset-bottom, 0px))" }}>
           <Outlet />
         </main>
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border flex items-center justify-around z-40 bottom-nav" style={{ height: "calc(60px + env(safe-area-inset-bottom, 0px))", paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}>
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border flex items-center justify-around z-40" style={{ height: "calc(60px + env(safe-area-inset-bottom, 0px))", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         {navItems.map((item) => (
           <NavLink
             key={item.to}
