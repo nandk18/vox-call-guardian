@@ -28,8 +28,21 @@ Vox is an AI phone receptionist for Indian small businesses. It answers calls 24
 
 ### Integrations
 - Connect Cal.com to enable live appointment booking during calls
-- Google Sheets integration coming soon
-- Zapier integration coming soon
+- Connect Zapier to send call data to 6000+ apps (Google Sheets, CRMs, Slack)
+- Google Sheets direct integration coming soon
+
+### Zapier
+Connect Vox to 6000+ apps via Zapier. After every call, Vox automatically sends call data to your Zap.
+
+To connect:
+1. Go to Integrations tab
+2. Click "Connect Zapier"
+3. Create a Zap at zapier.com with "Webhooks by Zapier" as trigger
+4. Paste the webhook URL
+5. Click "Save & Test"
+6. Map fields in Zapier to your destination (Google Sheets, CRM etc)
+
+Fields sent to Zapier: date_time, caller_number, caller_name, duration_secs, outcome, caller_need, urgency, summary, business_name, recording_url
 
 ### Settings
 - Manage notification preferences (Email, WhatsApp, SMS)
