@@ -166,44 +166,57 @@ ${Deno.env.get('VOX_APP_URL') || 'https://vox-call-guardian.lovable.app'}/app/in
       }
     }
 
-    // Send to Zapier for Google Sheets
-    const ZAPIER_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/26174803/u7lsamc/'
+    // Zapier webhook — dynamic from integrations table
+    if (shouldSendChannel('zapier')) {
+      const { data: zapierIntegration } = await supabaseAdmin
+        .from('integrations')
+        .select('api_key, is_active')
+        .eq('agent_id', agent_id)
+        .eq('type', 'zapier')
+        .maybeSingle()
 
-    try {
-      const zapierPayload = {
-        date_time: new Date(call.created_at).toLocaleString('en-IN', {
-          timeZone: 'Asia/Kolkata',
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true
-        }),
-        caller_number: call.caller_number || 'Unknown',
-        caller_name: call.caller_name || 'Not provided',
-        duration_secs: call.duration_secs || 0,
-        outcome: call.outcome || 'unknown',
-        caller_need: call.caller_need || 'Not captured',
-        urgency: call.caller_urgency || 'low',
-        summary: call.summary || 'No summary available',
-        business_name: agent.business_name || '',
-        recording_url: call.recording_url || '',
-        inbox_url: `${Deno.env.get('VOX_APP_URL') || 'https://vox-call-guardian.lovable.app'}/app/inbox`
+      const zapierWebhookUrl = zapierIntegration?.is_active ? zapierIntegration.api_key : null
+
+      if (zapierWebhookUrl) {
+        try {
+          const zapierPayload = {
+            date_time: new Date(call.created_at).toLocaleString('en-IN', {
+              timeZone: 'Asia/Kolkata',
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            }),
+            caller_number: call.caller_number || 'Unknown',
+            caller_name: call.caller_name || 'Not provided',
+            duration_secs: call.duration_secs || 0,
+            outcome: call.outcome || 'unknown',
+            caller_need: call.caller_need || 'Not captured',
+            urgency: call.caller_urgency || 'low',
+            summary: call.summary || 'No summary available',
+            business_name: agent.business_name || '',
+            recording_url: call.recording_url || '',
+            inbox_url: `${Deno.env.get('VOX_APP_URL') || 'https://vox-call-guardian.lovable.app'}/app/inbox`
+          }
+
+          const zapierRes = await fetch(zapierWebhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(zapierPayload)
+          })
+
+          zapierSent = zapierRes.ok
+          console.log('Zapier webhook:', zapierRes.status, zapierRes.ok ? 'success' : 'failed')
+          debugResponses.zapier = { status: zapierRes.status, ok: zapierRes.ok }
+        } catch (e) {
+          console.error('Zapier webhook error:', e)
+          debugResponses.zapier = { error: String(e) }
+        }
+      } else {
+        console.log('Zapier not connected for this agent — skipping')
       }
-
-      const zapierRes = await fetch(ZAPIER_WEBHOOK, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(zapierPayload)
-      })
-
-      zapierSent = zapierRes.ok
-      console.log('Zapier webhook:', zapierRes.status, zapierRes.ok ? 'success' : 'failed')
-      debugResponses.zapier = { status: zapierRes.status, ok: zapierRes.ok }
-    } catch (e) {
-      console.error('Zapier webhook error:', e)
-      debugResponses.zapier = { error: String(e) }
     }
 
     // Mark notification as sent (only for real calls)

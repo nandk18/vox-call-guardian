@@ -12,7 +12,7 @@
 - **AI Analysis**: Claude Haiku (transcript analysis in webhook)
 - **Email**: Resend (from noreply@tushietrials.ca)
 - **SMS**: MSG91 (requires DLT registration)
-- **Notifications**: Zapier webhook → Google Sheets
+- **Notifications**: Zapier webhook (dynamic per agent from integrations table) → Google Sheets
 - **Scheduling**: Cal.com v1 (via Bolna native tools)
 
 ## Database Schema (Supabase)

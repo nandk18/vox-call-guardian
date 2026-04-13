@@ -37,6 +37,7 @@ const IntegrationsPage = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  // Cal.com state
   const [connectOpen, setConnectOpen] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [apiKey, setApiKey] = useState("");
@@ -47,13 +48,20 @@ const IntegrationsPage = () => {
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(1);
 
+  // Zapier state
+  const [zapierConnectOpen, setZapierConnectOpen] = useState(false);
+  const [zapierDisconnectOpen, setZapierDisconnectOpen] = useState(false);
+  const [zapierUrl, setZapierUrl] = useState("");
+  const [zapierSaving, setZapierSaving] = useState(false);
+  const [zapierError, setZapierError] = useState("");
+
   // Get agent
   const { data: agent } = useQuery({
     queryKey: ["integrations-agent", user?.id],
     queryFn: async () => {
       const { data } = await supabase
         .from("agents")
-        .select("id")
+        .select("id, business_name")
         .eq("user_id", user!.id)
         .maybeSingle();
       return data;
@@ -76,7 +84,23 @@ const IntegrationsPage = () => {
     enabled: !!agent?.id,
   });
 
+  // Get Zapier integration
+  const { data: zapierIntegration } = useQuery({
+    queryKey: ["zapier-integration", agent?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("integrations")
+        .select("*")
+        .eq("agent_id", agent!.id)
+        .eq("type", "zapier")
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!agent?.id,
+  });
+
   const isCalConnected = !!calIntegration?.api_key;
+  const isZapierConnected = !!zapierIntegration?.api_key && zapierIntegration?.is_active;
 
   const handleFetchEvents = async () => {
     if (!apiKey.trim()) {
@@ -129,7 +153,6 @@ const IntegrationsPage = () => {
     );
     setSaving(false);
     if (error) {
-      // fallback: delete + insert
       await supabase
         .from("integrations")
         .delete()
@@ -174,6 +197,68 @@ const IntegrationsPage = () => {
     setEventTypes([]);
     setSelectedEventId("");
     setStep(1);
+  };
+
+  // Zapier handlers
+  const handleZapierSave = async () => {
+    if (!agent?.id || !zapierUrl.trim()) return;
+    if (!zapierUrl.startsWith("https://hooks.zapier.com")) {
+      setZapierError("URL must start with https://hooks.zapier.com");
+      return;
+    }
+    setZapierError("");
+    setZapierSaving(true);
+    try {
+      const testRes = await fetch(zapierUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        mode: "no-cors",
+        body: JSON.stringify({
+          test: true,
+          message: "Vox connected successfully!",
+          business: agent.business_name || "",
+          timestamp: new Date().toISOString(),
+        }),
+      });
+
+      // no-cors means opaque response, assume success
+      await supabase
+        .from("integrations")
+        .delete()
+        .eq("agent_id", agent.id)
+        .eq("type", "zapier");
+      const { error } = await supabase.from("integrations").insert({
+        agent_id: agent.id,
+        type: "zapier",
+        api_key: zapierUrl,
+        is_active: true,
+      });
+      if (error) {
+        setZapierError("Failed to save. Please try again.");
+        return;
+      }
+      toast.success("✅ Zapier connected and tested!");
+      setZapierConnectOpen(false);
+      setZapierUrl("");
+      setZapierError("");
+      queryClient.invalidateQueries({ queryKey: ["zapier-integration"] });
+    } catch (e) {
+      setZapierError("❌ Could not reach webhook URL. Check the URL and try again.");
+    } finally {
+      setZapierSaving(false);
+    }
+  };
+
+  const handleZapierDisconnect = async () => {
+    if (!agent?.id) return;
+    await supabase
+      .from("integrations")
+      .delete()
+      .eq("agent_id", agent.id)
+      .eq("type", "zapier");
+    toast.success("Zapier disconnected");
+    setZapierDisconnectOpen(false);
+    queryClient.invalidateQueries({ queryKey: ["zapier-integration"] });
   };
 
   return (
@@ -255,6 +340,63 @@ const IntegrationsPage = () => {
           </CardContent>
         </Card>
 
+        {/* Zapier Card */}
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3 flex-1">
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: "rgba(255, 74, 0, 0.1)" }}>
+                  <Zap className="w-5 h-5" style={{ color: "#FF4A00" }} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-semibold">Zapier</span>
+                    {isZapierConnected ? (
+                      <Badge className="bg-emerald-500/15 text-emerald-400 border-0 text-[10px]">
+                        Connected
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-[10px]">
+                        Not Connected
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Send call data to 6000+ apps automatically. Connect to Google
+                    Sheets, CRMs, Slack, and more when a call ends.
+                  </p>
+                  {isZapierConnected && (
+                    <p className="mt-2 text-sm">🔗 Webhook active</p>
+                  )}
+                </div>
+              </div>
+              <div className="shrink-0">
+                {isZapierConnected ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setZapierDisconnectOpen(true)}
+                  >
+                    Disconnect
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setZapierUrl("");
+                      setZapierError("");
+                      setZapierConnectOpen(true);
+                    }}
+                  >
+                    Connect Zapier
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Google Sheets — Coming Soon */}
         <Card className="opacity-60">
           <CardContent className="p-5">
@@ -273,34 +415,6 @@ const IntegrationsPage = () => {
                   <p className="text-sm text-muted-foreground">
                     Auto-log every call to a Google Sheet. Track caller history,
                     needs, and outcomes automatically.
-                  </p>
-                </div>
-              </div>
-              <Button size="sm" variant="secondary" disabled>
-                Coming Soon
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Zapier — Coming Soon */}
-        <Card className="opacity-60">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3 flex-1">
-                <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center shrink-0">
-                  <Zap className="w-5 h-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-semibold">Zapier</span>
-                    <Badge variant="secondary" className="text-[10px]">
-                      Coming Soon
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Connect Vox to 6000+ apps. Trigger workflows when calls end,
-                    leads come in, or bookings are made.
                   </p>
                 </div>
               </div>
@@ -407,7 +521,7 @@ const IntegrationsPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Disconnect Confirm */}
+      {/* Disconnect Cal.com Confirm */}
       <AlertDialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -420,6 +534,110 @@ const IntegrationsPage = () => {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDisconnect}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Disconnect
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Connect Zapier Modal */}
+      <Dialog
+        open={zapierConnectOpen}
+        onOpenChange={(v) => {
+          setZapierConnectOpen(v);
+          if (!v) { setZapierUrl(""); setZapierError(""); }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Connect Zapier</DialogTitle>
+            <DialogDescription>
+              Paste your Zapier webhook URL to automatically send call data to any app.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            {/* Instructions */}
+            <div className="rounded-lg p-4 text-sm space-y-2" style={{ background: "rgba(255,74,0,0.1)", border: "1px solid rgba(255,74,0,0.3)" }}>
+              <p className="font-medium">How to get your webhook URL:</p>
+              <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                <li>Go to zapier.com → Create Zap</li>
+                <li>Trigger: Webhooks by Zapier → Catch Hook</li>
+                <li>Copy the webhook URL</li>
+                <li>Action: Google Sheets or any app</li>
+              </ol>
+              <a
+                href="https://zapier.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-primary hover:underline text-xs mt-1"
+              >
+                Open Zapier →
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+
+            {/* URL input */}
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Zapier Webhook URL
+              </label>
+              <Input
+                value={zapierUrl}
+                onChange={(e) => setZapierUrl(e.target.value)}
+                placeholder="https://hooks.zapier.com/hooks/catch/..."
+              />
+              <p className="text-xs text-muted-foreground mt-1.5">
+                We'll send call details here after every call ends
+              </p>
+            </div>
+
+            {zapierError && (
+              <div className="bg-destructive/10 text-destructive rounded-lg p-3 text-sm">
+                {zapierError}
+              </div>
+            )}
+
+            {/* Data preview */}
+            <div>
+              <p className="text-xs text-muted-foreground mb-1.5">Data we'll send to Zapier:</p>
+              <pre className="text-[11px] bg-secondary rounded-lg p-3 overflow-x-auto text-muted-foreground">
+{`{
+  date_time, caller_number,
+  caller_name, duration_secs,
+  outcome, caller_need, urgency,
+  summary, business_name,
+  recording_url
+}`}
+              </pre>
+            </div>
+
+            <Button
+              className="w-full"
+              onClick={handleZapierSave}
+              disabled={!zapierUrl.trim() || zapierSaving}
+            >
+              {zapierSaving ? "Testing…" : "Save & Test"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Disconnect Zapier Confirm */}
+      <AlertDialog open={zapierDisconnectOpen} onOpenChange={setZapierDisconnectOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect Zapier?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Call data will no longer be sent to your Zap.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleZapierDisconnect}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Disconnect
