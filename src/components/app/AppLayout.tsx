@@ -141,7 +141,7 @@ const AppLayout = () => {
                 <NavLink
                   to={item.to}
                   className={({ isActive }) =>
-                    `relative w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
+                    `relative overflow-visible w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
                       isActive
                         ? "bg-primary/15 text-primary"
                         : "text-muted-foreground hover:bg-secondary hover:text-foreground"
@@ -150,7 +150,27 @@ const AppLayout = () => {
                 >
                   <item.icon className="w-5 h-5" />
                   {item.badge ? (
-                    <span className={`absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center ${badgePulse ? "animate-pulse" : ""}`}>
+                    <span
+                      className={badgePulse ? "animate-pulse" : ""}
+                      style={{
+                        position: "absolute",
+                        top: "-6px",
+                        right: "-6px",
+                        minWidth: "18px",
+                        height: "18px",
+                        padding: "0 4px",
+                        borderRadius: "9px",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        background: "#ef4444",
+                        color: "white",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 10,
+                        border: "2px solid #0d0f14",
+                      }}
+                    >
                       {item.badge > 99 ? "99+" : item.badge}
                     </span>
                   ) : null}
