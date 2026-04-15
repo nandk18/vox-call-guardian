@@ -134,7 +134,7 @@ const AppLayout = () => {
           V
         </div>
 
-        <nav className="flex-1 flex flex-col items-center gap-2">
+        <nav className="flex-1 flex flex-col items-center gap-2 overflow-visible">
           {navItems.map((item) => (
             <Tooltip key={item.to}>
               <TooltipTrigger asChild>
