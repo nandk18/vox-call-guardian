@@ -129,12 +129,12 @@ const AppLayout = () => {
       <PWAInstallPrompt />
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col items-center w-[72px] border-r border-border bg-card fixed h-full z-40 pt-4">
+      <aside className="hidden md:flex flex-col items-center w-[72px] border-r border-border bg-card fixed h-full z-40 pt-4 overflow-visible">
         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg mb-8">
           V
         </div>
 
-        <nav className="flex-1 flex flex-col items-center gap-2">
+        <nav className="flex-1 flex flex-col items-center gap-2 overflow-visible">
           {navItems.map((item) => (
             <Tooltip key={item.to}>
               <TooltipTrigger asChild>
