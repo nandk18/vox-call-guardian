@@ -68,7 +68,7 @@ const SettingsPage = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("agents")
-        .select("id, phone_number, vox_number, owner_mobile, owner_whatsapp, trial_ends_at, status, business_name, bolna_agent_id, notification_email, notification_whatsapp, notification_sms")
+        .select("id, phone_number, vox_number, owner_mobile, owner_whatsapp, trial_ends_at, status, business_name, bolna_agent_id, plan, notification_email, notification_whatsapp, notification_sms")
         .eq("user_id", user!.id)
         .order("created_at", { ascending: false })
         .limit(1)
