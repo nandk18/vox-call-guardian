@@ -58,7 +58,12 @@ Deno.serve(async (req) => {
       eventType === 'payment.captured'
     ) {
       const email = extractEmail()
-      console.log('razorpay-webhook: email:', email)
+      const planId =
+        event.payload?.subscription?.entity?.plan_id ||
+        event.payload?.payment?.entity?.description ||
+        null
+      const isYearly = planId === 'plan_SkoqPthvaM1v3O'
+      console.log('razorpay-webhook: email:', email, 'plan_id:', planId)
       if (email) {
         const user = await findUserByEmail(email)
         if (user) {
@@ -67,7 +72,7 @@ Deno.serve(async (req) => {
             .update({ plan: 'unlimited', status: 'active', trial_ends_at: null })
             .eq('user_id', user.id)
           if (error) console.error('razorpay-webhook: DB error:', error)
-          else console.log('razorpay-webhook: Plan upgraded for:', email)
+          else console.log('razorpay-webhook: Plan activated:', isYearly ? 'Yearly' : 'Monthly', 'for:', email)
         } else {
           console.log('razorpay-webhook: User not found for email:', email)
         }
