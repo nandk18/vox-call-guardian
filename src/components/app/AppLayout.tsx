@@ -92,13 +92,21 @@ const AppLayout = () => {
     return () => { supabase.removeChannel(channel); };
   }, [agent?.id, queryClient]);
 
+  const isAdmin = isAdminEmail(user?.email);
+  const isPaid = agent?.plan === "unlimited";
   const trialEndsAt = agent?.trial_ends_at ? new Date(agent.trial_ends_at) : null;
   const daysLeft = trialEndsAt
     ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / 86400000))
     : null;
-  const showTrialBanner = daysLeft !== null && daysLeft <= 3 && daysLeft > 0;
-  const trialExpired = trialEndsAt ? trialEndsAt.getTime() < Date.now() : false;
+  const showTrialBanner = !isAdmin && !isPaid && daysLeft !== null && daysLeft <= 3 && daysLeft > 0;
+  const trialExpiredRaw = trialEndsAt ? trialEndsAt.getTime() < Date.now() : false;
+  const dismissedAt = typeof window !== "undefined" ? localStorage.getItem("trial_dismissed_at") : null;
+  const dismissedRecently = dismissedAt
+    ? Date.now() - new Date(dismissedAt).getTime() < 24 * 60 * 60 * 1000
+    : false;
+  const trialExpired = !isAdmin && !isPaid && trialExpiredRaw && !dismissedRecently;
   const [trialDismissed, setTrialDismissed] = useState(false);
+  const [modalDismissed, setModalDismissed] = useState(false);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
