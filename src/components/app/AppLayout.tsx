@@ -133,7 +133,7 @@ const AppLayout = () => {
   return (
     <div className="h-full flex bg-background overflow-hidden">
       <OfflineBanner />
-      <TrialExpiredModal open={trialExpired} />
+      <TrialExpiredModal open={trialExpired && !modalDismissed} onDismiss={() => setModalDismissed(true)} />
       {isTestMode && <TestPanel />}
       <PWAInstallPrompt />
 
