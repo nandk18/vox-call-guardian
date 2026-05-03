@@ -14,6 +14,7 @@ import TrialExpiredModal from "@/components/app/TrialExpiredModal";
 import OfflineBanner from "@/components/app/OfflineBanner";
 import TestPanel from "@/components/app/TestPanel";
 import PWAInstallPrompt from "@/components/app/PWAInstallPrompt";
+import { isAdminEmail } from "@/lib/admin";
 
 const pageTitles: Record<string, string> = {
   "/app/inbox": "Inbox",
