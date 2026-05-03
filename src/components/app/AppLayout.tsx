@@ -45,7 +45,7 @@ const AppLayout = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("agents")
-        .select("id, trial_ends_at, onboarding_complete")
+        .select("id, trial_ends_at, onboarding_complete, plan")
         .eq("user_id", user!.id)
         .maybeSingle();
       return data;
