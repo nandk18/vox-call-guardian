@@ -343,29 +343,33 @@ const SettingsPage = () => {
             <div className="rounded-lg border border-primary/40 bg-primary/10 p-4">
               <p className="text-sm font-bold text-primary mb-1">✅ Active Subscription</p>
               <p className="text-sm text-foreground mb-2">Your Vox subscription is active.</p>
-              <p className="text-xs text-muted-foreground">To manage your subscription, contact support@voxai.in</p>
+              <p className="text-xs text-muted-foreground">To manage or cancel, contact support@voxai.in</p>
             </div>
           ) : trialEndsAt && trialEndsAt.getTime() < Date.now() ? (
-            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4">
-              <p className="text-sm font-bold text-destructive mb-3">⚠️ Trial Expired</p>
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 space-y-3">
+              <p className="text-sm font-bold text-destructive">⚠️ Trial Expired</p>
+              <PlanToggle value={billingCycle} onChange={setBillingCycle} />
+              <PriceDisplay cycle={billingCycle} />
               <Button
-                onClick={() => window.open(RAZORPAY_LINK, "_blank")}
+                onClick={() => window.open(RAZORPAY_LINKS[billingCycle], "_blank")}
                 className="w-full font-semibold min-h-[44px]"
               >
-                Subscribe Now — ₹999/mo
+                Subscribe Now
               </Button>
             </div>
           ) : (
-            <div className="rounded-lg border border-primary/40 bg-primary/10 p-4">
-              <p className="text-sm font-bold text-primary mb-1">🎉 Free Trial Active</p>
+            <div className="rounded-lg border border-primary/40 bg-primary/10 p-4 space-y-3">
+              <p className="text-sm font-bold text-primary">🎉 Free Trial Active</p>
               {trialEndsAt && (
-                <p className="text-xs text-muted-foreground mb-3">Expires {trialEndsAt.toLocaleDateString()}</p>
+                <p className="text-xs text-muted-foreground">Expires {trialEndsAt.toLocaleDateString()}</p>
               )}
+              <PlanToggle value={billingCycle} onChange={setBillingCycle} />
+              <PriceDisplay cycle={billingCycle} />
               <Button
-                onClick={() => window.open(RAZORPAY_LINK, "_blank")}
+                onClick={() => window.open(RAZORPAY_LINKS[billingCycle], "_blank")}
                 className="w-full font-semibold min-h-[44px]"
               >
-                Upgrade Now — ₹999/mo
+                Upgrade Now
               </Button>
             </div>
           )}
