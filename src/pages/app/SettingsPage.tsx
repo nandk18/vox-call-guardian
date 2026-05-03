@@ -63,6 +63,7 @@ const SettingsPage = () => {
   const [whatsappNotif, setWhatsappNotif] = useState(true);
   const [smsNotif, setSmsNotif] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("yearly");
 
   const { data: agent, refetch } = useQuery({
     queryKey: ["settings-agent", user?.id],
