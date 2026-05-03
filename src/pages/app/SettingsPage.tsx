@@ -33,7 +33,10 @@ type Agent = {
   status: string | null;
   business_name: string | null;
   bolna_agent_id: string | null;
+  plan: string | null;
 };
+
+const RAZORPAY_LINK = "https://rzp.io/rzp/gX8IPIVJ";
 
 type ModalType = "plan" | "phone" | "notifications" | "owner_mobile" | "owner_whatsapp" | null;
 
