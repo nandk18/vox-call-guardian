@@ -33,7 +33,10 @@ type Agent = {
   status: string | null;
   business_name: string | null;
   bolna_agent_id: string | null;
+  plan: string | null;
 };
+
+const RAZORPAY_LINK = "https://rzp.io/rzp/gX8IPIVJ";
 
 type ModalType = "plan" | "phone" | "notifications" | "owner_mobile" | "owner_whatsapp" | null;
 
@@ -65,7 +68,7 @@ const SettingsPage = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("agents")
-        .select("id, phone_number, vox_number, owner_mobile, owner_whatsapp, trial_ends_at, status, business_name, bolna_agent_id, notification_email, notification_whatsapp, notification_sms")
+        .select("id, phone_number, vox_number, owner_mobile, owner_whatsapp, trial_ends_at, status, business_name, bolna_agent_id, plan, notification_email, notification_whatsapp, notification_sms")
         .eq("user_id", user!.id)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -330,6 +333,42 @@ const SettingsPage = () => {
   return (
     <div className="max-w-[600px] mx-auto">
       <h2 className="text-2xl font-bold mb-6">Settings</h2>
+
+      <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-3">Subscription</p>
+      <Card className="mb-8 border-border bg-card overflow-hidden">
+        <CardContent className="p-5">
+          {agent?.plan === "unlimited" ? (
+            <div className="rounded-lg border border-primary/40 bg-primary/10 p-4">
+              <p className="text-sm font-bold text-primary mb-1">✅ Active Subscription</p>
+              <p className="text-sm text-foreground mb-2">Your Vox subscription is active.</p>
+              <p className="text-xs text-muted-foreground">To manage your subscription, contact support@voxai.in</p>
+            </div>
+          ) : trialEndsAt && trialEndsAt.getTime() < Date.now() ? (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4">
+              <p className="text-sm font-bold text-destructive mb-3">⚠️ Trial Expired</p>
+              <Button
+                onClick={() => window.open(RAZORPAY_LINK, "_blank")}
+                className="w-full font-semibold min-h-[44px]"
+              >
+                Subscribe Now — ₹999/mo
+              </Button>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-primary/40 bg-primary/10 p-4">
+              <p className="text-sm font-bold text-primary mb-1">🎉 Free Trial Active</p>
+              {trialEndsAt && (
+                <p className="text-xs text-muted-foreground mb-3">Expires {trialEndsAt.toLocaleDateString()}</p>
+              )}
+              <Button
+                onClick={() => window.open(RAZORPAY_LINK, "_blank")}
+                className="w-full font-semibold min-h-[44px]"
+              >
+                Upgrade Now — ₹999/mo
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-3">Your Account</p>
       <Card className="mb-8 border-border bg-card overflow-hidden">

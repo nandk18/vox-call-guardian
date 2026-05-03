@@ -14,6 +14,7 @@ import TrialExpiredModal from "@/components/app/TrialExpiredModal";
 import OfflineBanner from "@/components/app/OfflineBanner";
 import TestPanel from "@/components/app/TestPanel";
 import PWAInstallPrompt from "@/components/app/PWAInstallPrompt";
+import { isAdminEmail } from "@/lib/admin";
 
 const pageTitles: Record<string, string> = {
   "/app/inbox": "Inbox",
@@ -44,7 +45,7 @@ const AppLayout = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("agents")
-        .select("id, trial_ends_at, onboarding_complete")
+        .select("id, trial_ends_at, onboarding_complete, plan")
         .eq("user_id", user!.id)
         .maybeSingle();
       return data;
@@ -91,13 +92,21 @@ const AppLayout = () => {
     return () => { supabase.removeChannel(channel); };
   }, [agent?.id, queryClient]);
 
+  const isAdmin = isAdminEmail(user?.email);
+  const isPaid = agent?.plan === "unlimited";
   const trialEndsAt = agent?.trial_ends_at ? new Date(agent.trial_ends_at) : null;
   const daysLeft = trialEndsAt
     ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / 86400000))
     : null;
-  const showTrialBanner = daysLeft !== null && daysLeft <= 3 && daysLeft > 0;
-  const trialExpired = trialEndsAt ? trialEndsAt.getTime() < Date.now() : false;
+  const showTrialBanner = !isAdmin && !isPaid && daysLeft !== null && daysLeft <= 3 && daysLeft > 0;
+  const trialExpiredRaw = trialEndsAt ? trialEndsAt.getTime() < Date.now() : false;
+  const dismissedAt = typeof window !== "undefined" ? localStorage.getItem("trial_dismissed_at") : null;
+  const dismissedRecently = dismissedAt
+    ? Date.now() - new Date(dismissedAt).getTime() < 24 * 60 * 60 * 1000
+    : false;
+  const trialExpired = !isAdmin && !isPaid && trialExpiredRaw && !dismissedRecently;
   const [trialDismissed, setTrialDismissed] = useState(false);
+  const [modalDismissed, setModalDismissed] = useState(false);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -124,7 +133,7 @@ const AppLayout = () => {
   return (
     <div className="h-full flex bg-background overflow-hidden">
       <OfflineBanner />
-      <TrialExpiredModal open={trialExpired} />
+      <TrialExpiredModal open={trialExpired && !modalDismissed} onDismiss={() => setModalDismissed(true)} />
       {isTestMode && <TestPanel />}
       <PWAInstallPrompt />
 

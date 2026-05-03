@@ -6,62 +6,93 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  const respond = (msg = 'ok') =>
-    new Response(JSON.stringify({ received: true, msg }), { status: 200 })
-
   try {
-    const rawBody = await req.text()
-    const signature = req.headers.get('x-razorpay-signature')
-    const secret = Deno.env.get('RAZORPAY_WEBHOOK_SECRET')
+    const body = await req.text()
+    const signature = req.headers.get('x-razorpay-signature') || ''
 
-    if (!secret || !signature) {
-      return respond('missing signature or secret')
-    }
-
-    // 1. Verify signature
+    const webhookSecret = Deno.env.get('RAZORPAY_WEBHOOK_SECRET') || ''
     const encoder = new TextEncoder()
     const key = await crypto.subtle.importKey(
-      'raw', encoder.encode(secret),
-      { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+      'raw',
+      encoder.encode(webhookSecret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
     )
-    const sigBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(rawBody))
-    const expectedSig = Array.from(new Uint8Array(sigBuffer))
-      .map(b => b.toString(16).padStart(2, '0')).join('')
 
-    if (signature !== expectedSig) {
-      console.error('Invalid Razorpay signature')
-      return respond('invalid signature')
+    const signatureBytes = await crypto.subtle.sign('HMAC', key, encoder.encode(body))
+    const expectedSignature = Array.from(new Uint8Array(signatureBytes))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+
+    if (expectedSignature !== signature) {
+      console.error('razorpay-webhook: Invalid signature')
+      return new Response(JSON.stringify({ error: 'Invalid signature' }), { status: 400 })
     }
 
-    const payload = JSON.parse(rawBody)
-    const event = payload.event
+    const event = JSON.parse(body)
+    const eventType = event.event
+    console.log('razorpay-webhook: event:', eventType)
 
-    // 2. Extract agent_id from notes
-    const agent_id =
-      payload.payload?.subscription?.entity?.notes?.agent_id ||
-      payload.payload?.payment?.entity?.notes?.agent_id
-
-    if (!agent_id) {
-      console.error('No agent_id in Razorpay payload notes:', payload)
-      return respond('no agent_id in notes')
+    const extractEmail = (): string | null => {
+      let email: string | null = null
+      if (event.payload?.subscription?.entity) {
+        const sub = event.payload.subscription.entity
+        email = sub.notes?.email || sub.customer_email || null
+      }
+      if (!email && event.payload?.payment?.entity) {
+        const payment = event.payload.payment.entity
+        email = payment.email || payment.notes?.email || null
+      }
+      return email
     }
 
-    // 3. Handle events
-    if (event === 'payment.captured' || event === 'subscription.activated') {
-      await supabaseAdmin.from('agents').update({
-        plan: 'unlimited', status: 'active', trial_ends_at: null
-      }).eq('id', agent_id)
-      console.log(`Agent ${agent_id} subscribed successfully`)
-    } else if (event === 'subscription.cancelled' || event === 'subscription.halted') {
-      await supabaseAdmin.from('agents').update({
-        plan: 'free', status: 'inactive'
-      }).eq('id', agent_id)
-      console.log(`Agent ${agent_id} subscription cancelled`)
+    const findUserByEmail = async (email: string) => {
+      const { data: authUser } = await supabaseAdmin.auth.admin.listUsers()
+      return authUser?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
     }
 
-    return respond('processed')
+    if (
+      eventType === 'subscription.activated' ||
+      eventType === 'subscription.charged' ||
+      eventType === 'payment.captured'
+    ) {
+      const email = extractEmail()
+      console.log('razorpay-webhook: email:', email)
+      if (email) {
+        const user = await findUserByEmail(email)
+        if (user) {
+          const { error } = await supabaseAdmin
+            .from('agents')
+            .update({ plan: 'unlimited', status: 'active', trial_ends_at: null })
+            .eq('user_id', user.id)
+          if (error) console.error('razorpay-webhook: DB error:', error)
+          else console.log('razorpay-webhook: Plan upgraded for:', email)
+        } else {
+          console.log('razorpay-webhook: User not found for email:', email)
+        }
+      }
+    }
+
+    if (eventType === 'subscription.cancelled' || eventType === 'subscription.completed') {
+      const email = extractEmail()
+      if (email) {
+        const user = await findUserByEmail(email)
+        if (user) {
+          await supabaseAdmin
+            .from('agents')
+            .update({ plan: 'trial', trial_ends_at: new Date().toISOString() })
+            .eq('user_id', user.id)
+          console.log('razorpay-webhook: Plan downgraded for:', email)
+        }
+      }
+    }
+
+    return new Response(JSON.stringify({ received: true }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   } catch (err) {
     console.error('razorpay-webhook error:', err)
-    return respond('error but acknowledged')
+    return new Response(JSON.stringify({ error: String(err) }), { status: 500 })
   }
 })
